@@ -91,7 +91,7 @@ class ExcelColumnClearer:
                             column_range.Insert()
                             
                             # 设置新列的标题
-                            ws.Cells(1, self.column_number).Value = 'target'
+                            ws.Cells(1, self.column_number).Value = 'Translation'
                             
                             wb.Save()
                             wb.Close()
