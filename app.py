@@ -52,29 +52,32 @@ class ExcelUpdaterApp:
         self.multi_processor = MultiColumnExcelProcessor(print)
 
     def init_components(self):
-        # 批量更新工具
-        updater_controller = UpdaterController(None, self.excel_processor)
-        updater_frame = UpdaterFrame(self.notebook, updater_controller)
-        updater_controller.frame = updater_frame
-        self.notebook.add(updater_frame, text='批量更新')
-
+        
         # 列清空工具
         clearer_controller = ClearerController(None, self.clearer)
         clearer_frame = ClearerFrame(self.notebook, clearer_controller)
         clearer_controller.frame = clearer_frame
         self.notebook.add(clearer_frame, text='列清空')
 
-        # 兼容性处理工具
-        compatibility_controller = CompatibilityController(None, self.compatibility_processor)
-        compatibility_frame = CompatibilityFrame(self.notebook, compatibility_controller)
-        compatibility_controller.frame = compatibility_frame
-        self.notebook.add(compatibility_frame, text='兼容性处理')
+        # 批量更新工具
+        updater_controller = UpdaterController(None, self.excel_processor)
+        updater_frame = UpdaterFrame(self.notebook, updater_controller)
+        updater_controller.frame = updater_frame
+        self.notebook.add(updater_frame, text='批量更新')
 
         # 多列更新工具
         multi_controller = MultiColumnController(None, self.multi_processor)
         multi_frame = MultiColumnFrame(self.notebook, multi_controller)
         multi_controller.frame = multi_frame
         self.notebook.add(multi_frame, text='多列更新')
+
+        # 兼容性处理工具
+        # compatibility_controller = CompatibilityController(None, self.compatibility_processor)
+        # compatibility_frame = CompatibilityFrame(self.notebook, compatibility_controller)
+        # compatibility_controller.frame = compatibility_frame
+        # self.notebook.add(compatibility_frame, text='兼容性处理')
+
+
 
     def run(self):
         self.root.mainloop()
