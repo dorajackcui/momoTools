@@ -1,11 +1,12 @@
 import tkinter as tk
 from tkinter import ttk
-from ui_components import UpdaterFrame, ClearerFrame, CompatibilityFrame, MultiColumnFrame
-from controllers import UpdaterController, ClearerController, CompatibilityController, MultiColumnController
+from ui_components import UpdaterFrame, ClearerFrame, CompatibilityFrame, MultiColumnFrame, DeepReplaceFrame
+from controllers import UpdaterController, ClearerController, CompatibilityController, MultiColumnController, DeepReplaceController
 from core.excel_processor import ExcelProcessor
 from core.excel_cleaner import ExcelColumnClearer
 from core.excel_compatibility_processor import ExcelCompatibilityProcessor
 from core.multi_column_processor import MultiColumnExcelProcessor
+from core.deep_replace_processor import DeepReplaceProcessor
 
 class ExcelUpdaterApp:
     def __init__(self):
@@ -50,6 +51,7 @@ class ExcelUpdaterApp:
         self.clearer = ExcelColumnClearer()
         self.compatibility_processor = ExcelCompatibilityProcessor()
         self.multi_processor = MultiColumnExcelProcessor(print)
+        self.deep_replace_processor = DeepReplaceProcessor(print)
 
     def init_components(self):
         
@@ -70,6 +72,12 @@ class ExcelUpdaterApp:
         multi_frame = MultiColumnFrame(self.notebook, multi_controller)
         multi_controller.frame = multi_frame
         self.notebook.add(multi_frame, text='多列更新')
+
+        # 深度替换工具
+        deep_replace_controller = DeepReplaceController(None, self.deep_replace_processor)
+        deep_replace_frame = DeepReplaceFrame(self.notebook, deep_replace_controller)
+        deep_replace_controller.frame = deep_replace_frame
+        self.notebook.add(deep_replace_frame, text='深度替换')
 
         # 兼容性处理工具
         # compatibility_controller = CompatibilityController(None, self.compatibility_processor)

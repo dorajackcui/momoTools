@@ -122,6 +122,29 @@ class CompatibilityFrame(BaseFrame):
         btn_start = tk.Button(self, text="开始处理", **self.button_style, command=self.controller.process_compatibility)
         btn_start.pack(pady=10)
 
+class DeepReplaceFrame(BaseFrame):
+    def __init__(self, parent, controller):
+        super().__init__(parent)
+        self.controller = controller
+        self.init_ui()
+
+    def init_ui(self):
+        # 源文件夹选择按钮
+        btn_source = tk.Button(self, text="选择源文件夹", **self.button_style, command=self.controller.select_source_folder)
+        btn_source.pack(pady=10)
+        self.source_label = tk.Label(self, text="未选择文件夹", **self.label_style)
+        self.source_label.pack()
+
+        # 目标文件夹选择按钮
+        btn_target = tk.Button(self, text="选择目标文件夹", **self.button_style, command=self.controller.select_target_folder)
+        btn_target.pack(pady=10)
+        self.target_label = tk.Label(self, text="未选择文件夹", **self.label_style)
+        self.target_label.pack()
+
+        # 执行按钮
+        btn_start = tk.Button(self, text="开始处理", **self.button_style, command=self.controller.process_files)
+        btn_start.pack(pady=10)
+
 class MultiColumnFrame(BaseFrame):
     def __init__(self, parent, controller):
         super().__init__(parent)

@@ -126,6 +126,38 @@ class CompatibilityController(BaseController):
         except Exception as e:
             messagebox.showerror("错误", str(e))
 
+class DeepReplaceController(BaseController):
+    def __init__(self, frame, processor):
+        super().__init__(frame)
+        self.processor = processor
+        self.source_folder = ""
+        self.target_folder = ""
+
+    def select_source_folder(self):
+        folder_path = filedialog.askdirectory(title="选择源文件夹")
+        if folder_path:
+            self.source_folder = folder_path
+            self.frame.source_label.config(text=f"已选择：{os.path.basename(folder_path)}")
+            self.processor.set_source_folder(folder_path)
+
+    def select_target_folder(self):
+        folder_path = filedialog.askdirectory(title="选择目标文件夹")
+        if folder_path:
+            self.target_folder = folder_path
+            self.frame.target_label.config(text=f"已选择：{os.path.basename(folder_path)}")
+            self.processor.set_target_folder(folder_path)
+
+    def process_files(self):
+        if not self.source_folder or not self.target_folder:
+            messagebox.showerror("错误", "请先选择源文件夹和目标文件夹！")
+            return
+
+        try:
+            processed_files = self.processor.process_files()
+            messagebox.showinfo("完成", f"共处理 {processed_files} 个文件。")
+        except Exception as e:
+            messagebox.showerror("错误", str(e))
+
 class MultiColumnController(BaseController):
     def __init__(self, frame, processor):
         super().__init__(frame)
