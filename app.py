@@ -12,7 +12,7 @@ class ExcelUpdaterApp:
     def __init__(self):
         self.root = tk.Tk()
         self.root.title("Excel 工具集")
-        self.root.geometry("400x500")
+        self.root.geometry("480x500")
         self.root.configure(bg='#f0f0f0')
         
         # 设置主题和样式
@@ -20,7 +20,7 @@ class ExcelUpdaterApp:
         
         # 创建选项卡控件
         self.notebook = ttk.Notebook(self.root)
-        self.notebook.pack(expand=True, fill='both', padx=5, pady=5)
+        self.notebook.pack(expand=True, fill='both', padx=1, pady=5)
         
         # 初始化处理器
         self.init_processors()
@@ -80,10 +80,10 @@ class ExcelUpdaterApp:
         self.notebook.add(deep_replace_frame, text='深度替换')
 
         # 兼容性处理工具
-        # compatibility_controller = CompatibilityController(None, self.compatibility_processor)
-        # compatibility_frame = CompatibilityFrame(self.notebook, compatibility_controller)
-        # compatibility_controller.frame = compatibility_frame
-        # self.notebook.add(compatibility_frame, text='兼容性处理')
+        compatibility_controller = CompatibilityController(None, self.compatibility_processor)
+        compatibility_frame = CompatibilityFrame(self.notebook, compatibility_controller)
+        compatibility_controller.frame = compatibility_frame
+        self.notebook.add(compatibility_frame, text='兼容性处理')
 
 
 
