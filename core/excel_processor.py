@@ -92,7 +92,8 @@ class ExcelProcessor:
                 content_val = row[2] if row[2] else ''
                 if match_val:  # 只存储有效的匹配值
                     # 使用key+匹配列内容作为combined key
-                    combined_key = f"{key}|{match_val.strip()}"
+                    match_val = str(match_val).strip()
+                    combined_key = f"{key}|{match_val}"
                     master_dict[combined_key] = content_val
 
 
