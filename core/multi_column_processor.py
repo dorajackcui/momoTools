@@ -141,7 +141,7 @@ class MultiColumnExcelProcessor:
                     continue
                     
                 # 使用key+匹配列内容作为combined key
-                combined_key = f"{key}|{match_val}"
+                combined_key = f"{key}|{match_val.strip()}"
                 
                 # 存储多列内容
                 content_values = []
@@ -228,7 +228,7 @@ class MultiColumnExcelProcessor:
                         continue
 
                     # 创建与master_dict相同格式的combined key
-                    combined_key = f"{target_key}|{target_match_value}"
+                    combined_key = f"{target_key}|{target_match_value.strip()}"
                     
                     # 使用combined key进行查找
                     if combined_key in master_dict:

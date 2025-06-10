@@ -92,7 +92,7 @@ class ExcelProcessor:
                 content_val = row[2] if row[2] else ''
                 if match_val:  # 只存储有效的匹配值
                     # 使用key+匹配列内容作为combined key
-                    combined_key = f"{key}|{match_val}"
+                    combined_key = f"{key}|{match_val.strip()}"
                     master_dict[combined_key] = content_val
 
 
@@ -161,7 +161,7 @@ class ExcelProcessor:
                         continue
 
                     # 创建与master_dict相同格式的combined key
-                    combined_key = f"{target_key}|{target_match_value}"
+                    combined_key = f"{target_key}|{target_match_value.strip()}"
                     
                     # 使用combined key进行查找
                     if combined_key in master_dict:
