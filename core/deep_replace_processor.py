@@ -47,10 +47,15 @@ class DeepReplaceProcessor:
             raise ValueError("源文件夹或目标文件夹不存在！")
 
         self.processed_files = 0
-        source_files = [f for f in os.listdir(self.source_folder) 
-                      if f.endswith(('.xlsx', '.xls')) and not f.startswith('~$')]
+        source_files = []
+        
+        # 递归遍历源文件夹中的所有 Excel 文件
+        for root, _, files in os.walk(self.source_folder):
+            for file in files:
+                if file.endswith(('.xlsx', '.xls')) and not file.startswith('~$'):
+                    source_files.append((file, os.path.join(root, file)))
 
-        for source_file in source_files:
+        for source_file, source_path in source_files:
             self.log(f"正在处理文件：{source_file}")
             target_file_path = self.find_file_in_directory(source_file, self.target_folder)
             
@@ -61,7 +66,6 @@ class DeepReplaceProcessor:
                     shutil.copy2(target_file_path, backup_path)
                     
                     # 复制新文件
-                    source_path = os.path.join(self.source_folder, source_file)
                     shutil.copy2(source_path, target_file_path)
                     
                     self.processed_files += 1
