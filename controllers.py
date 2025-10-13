@@ -197,3 +197,62 @@ class MultiColumnController(BaseController):
             messagebox.showinfo("完成", f"共更新 {updated_count} 处数据。")
         except Exception as e:
             messagebox.showerror("错误", str(e))
+
+class ReverseUpdaterController(BaseController):
+    def __init__(self, frame, processor):
+        super().__init__(frame)
+        self.processor = processor
+        self.master_file_path = ""
+        self.target_folder = ""
+
+    def select_master_file(self):
+        file_path = filedialog.askopenfilename(
+            title="选择 Master 总表",
+            filetypes=[("Excel 文件", "*.xlsx *.xls")]
+        )
+        if file_path:
+            self.master_file_path = file_path
+            self.frame.master_label.config(text=f"已选择：{os.path.basename(file_path)}")
+            self.processor.set_master_file(file_path)
+
+    def select_target_folder(self):
+        folder_path = filedialog.askdirectory(title="选择目标文件夹")
+        if folder_path:
+            self.target_folder = folder_path
+            self.frame.folder_label.config(text=f"已选择：{os.path.basename(folder_path)}")
+            self.processor.set_target_folder(folder_path)
+
+    def process_files(self):
+        if not self.master_file_path or not self.target_folder:
+            messagebox.showerror("错误", "请先选择 Master 文件和目标文件夹！")
+            return
+
+        try:
+            # 获取小表列配置
+            target_key_col = int(self.frame.target_key_col_var.get()) - 1
+            target_match_col = int(self.frame.target_match_col_var.get()) - 1
+            target_content_col = int(self.frame.target_content_col_var.get()) - 1
+
+            # 获取 Master 表列配置
+            master_key_col = int(self.frame.master_key_col_var.get()) - 1
+            master_match_col = int(self.frame.master_match_col_var.get()) - 1
+            master_update_col = int(self.frame.master_update_col_var.get()) - 1
+
+            # 验证列索引
+            if any(c < 0 for c in [target_key_col, target_match_col, target_content_col, 
+                                     master_key_col, master_match_col, master_update_col]):
+                raise ValueError("列索引必须大于0")
+
+            # 配置处理器
+            self.processor.set_target_columns(target_key_col, target_match_col, target_content_col)
+            self.processor.set_master_columns(master_key_col, master_match_col, master_update_col)
+
+        except ValueError as e:
+            messagebox.showerror("错误", f"列配置错误：{str(e)}")
+            return
+
+        try:
+            updated_count = self.processor.process_files()
+            messagebox.showinfo("完成", f"共更新 {updated_count} 行。")
+        except Exception as e:
+            messagebox.showerror("处理失败", str(e))

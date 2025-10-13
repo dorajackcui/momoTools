@@ -39,13 +39,13 @@ class UpdaterFrame(BaseFrame):
         # 匹配列选择
         match_frame = tk.Frame(self, bg='#f0f0f0')
         match_frame.pack(pady=10)
-        tk.Label(match_frame, text="匹配列：", **self.label_style).pack(side=tk.LEFT)
+        tk.Label(match_frame, text="原文列：", **self.label_style).pack(side=tk.LEFT)
         self.match_column_var = tk.StringVar(value="2")
         match_dropdown = tk.OptionMenu(match_frame, self.match_column_var, *["2", "3"])
         match_dropdown.config(bg='#4a90e2', fg='white', font=('Arial', 10), width=5)
         match_dropdown["menu"].config(bg='white', fg='#333333')
         match_dropdown.pack(side=tk.LEFT)
-        tk.Label(match_frame, text="列", **self.label_style).pack(side=tk.LEFT)
+        tk.Label(match_frame, text="列（小表）", **self.label_style).pack(side=tk.LEFT)
 
         # 内容列选择
         content_frame = tk.Frame(self, bg='#f0f0f0')
@@ -67,7 +67,7 @@ class UpdaterFrame(BaseFrame):
         update_dropdown.config(bg='#4a90e2', fg='white', font=('Arial', 10), width=5)
         update_dropdown["menu"].config(bg='white', fg='#333333')
         update_dropdown.pack(side=tk.LEFT)
-        tk.Label(update_frame, text="列（目标文件）", **self.label_style).pack(side=tk.LEFT)
+        tk.Label(update_frame, text="列（小表）", **self.label_style).pack(side=tk.LEFT)
 
         # 执行按钮
         btn_start = tk.Button(self, text="开始处理", **self.button_style, command=self.controller.process_files)
@@ -166,13 +166,13 @@ class MultiColumnFrame(BaseFrame):
         # 匹配列选择
         match_frame = tk.Frame(self, bg='#f0f0f0')
         match_frame.pack(pady=10)
-        tk.Label(match_frame, text="匹配列：", **self.label_style).pack(side=tk.LEFT)
+        tk.Label(match_frame, text="原文列：", **self.label_style).pack(side=tk.LEFT)
         self.match_column_var = tk.StringVar(value="3")
         match_dropdown = tk.OptionMenu(match_frame, self.match_column_var, *["4", "3"])
         match_dropdown.config(bg='#4a90e2', fg='white', font=('Arial', 10), width=5)
         match_dropdown["menu"].config(bg='white', fg='#333333')
         match_dropdown.pack(side=tk.LEFT)
-        tk.Label(match_frame, text="列", **self.label_style).pack(side=tk.LEFT)
+        tk.Label(match_frame, text="列（目标文件）", **self.label_style).pack(side=tk.LEFT)
 
         # 开始内容列选择
         start_frame = tk.Frame(self, bg='#f0f0f0')
@@ -210,3 +210,58 @@ class MultiColumnFrame(BaseFrame):
         # 执行按钮
         btn_start = tk.Button(self, text="开始处理", **self.button_style, command=self.controller.process_multi_column)
         btn_start.pack(pady=10)
+
+class ReverseUpdaterFrame(BaseFrame):
+    def __init__(self, parent, controller):
+        super().__init__(parent)
+        self.controller = controller
+        self.init_ui()
+
+    def init_ui(self):
+        # Master 文件选择
+        btn_master = tk.Button(self, text="选择 Master 总表", **self.button_style, command=self.controller.select_master_file)
+        btn_master.pack(pady=5)
+        self.master_label = tk.Label(self, text="未选择文件", **self.label_style)
+        self.master_label.pack()
+
+        # 目标文件夹选择
+        btn_folder = tk.Button(self, text="选择目标文件夹", **self.button_style, command=self.controller.select_target_folder)
+        btn_folder.pack(pady=5)
+        self.folder_label = tk.Label(self, text="未选择文件夹", **self.label_style)
+        self.folder_label.pack()
+
+        # --- 小表列配置 ---
+        target_frame = ttk.LabelFrame(self, text="小表（源）列配置", padding=(10, 5))
+        target_frame.pack(pady=10, padx=10, fill="x")
+
+        tk.Label(target_frame, text="Key 列:").grid(row=0, column=0, sticky="w")
+        self.target_key_col_var = tk.StringVar(value="1")
+        tk.Entry(target_frame, textvariable=self.target_key_col_var, width=5).grid(row=0, column=1)
+
+        tk.Label(target_frame, text="原文列:").grid(row=0, column=2, sticky="w", padx=(10, 0))
+        self.target_match_col_var = tk.StringVar(value="2")
+        tk.Entry(target_frame, textvariable=self.target_match_col_var, width=5).grid(row=0, column=3)
+
+        tk.Label(target_frame, text="译文列:").grid(row=0, column=4, sticky="w", padx=(10, 0))
+        self.target_content_col_var = tk.StringVar(value="3")
+        tk.Entry(target_frame, textvariable=self.target_content_col_var, width=5).grid(row=0, column=5)
+
+        # --- Master 表列配置 ---
+        master_config_frame = ttk.LabelFrame(self, text="Master 表（目标）列配置", padding=(10, 5))
+        master_config_frame.pack(pady=10, padx=10, fill="x")
+
+        tk.Label(master_config_frame, text="Key 列:").grid(row=0, column=0, sticky="w")
+        self.master_key_col_var = tk.StringVar(value="2")
+        tk.Entry(master_config_frame, textvariable=self.master_key_col_var, width=5).grid(row=0, column=1)
+
+        tk.Label(master_config_frame, text="原文列:").grid(row=0, column=2, sticky="w", padx=(10, 0))
+        self.master_match_col_var = tk.StringVar(value="3")
+        tk.Entry(master_config_frame, textvariable=self.master_match_col_var, width=5).grid(row=0, column=3)
+
+        tk.Label(master_config_frame, text="译文列:").grid(row=0, column=4, sticky="w", padx=(10, 0))
+        self.master_update_col_var = tk.StringVar(value="4")
+        tk.Entry(master_config_frame, textvariable=self.master_update_col_var, width=5).grid(row=0, column=5)
+
+        # 执行按钮
+        btn_start = tk.Button(self, text="开始处理", **self.button_style, command=self.controller.process_files)
+        btn_start.pack(pady=20)

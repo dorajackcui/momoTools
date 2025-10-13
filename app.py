@@ -1,17 +1,18 @@
 import tkinter as tk
 from tkinter import ttk
-from ui_components import UpdaterFrame, ClearerFrame, CompatibilityFrame, MultiColumnFrame, DeepReplaceFrame
-from controllers import UpdaterController, ClearerController, CompatibilityController, MultiColumnController, DeepReplaceController
+from ui_components import UpdaterFrame, ClearerFrame, CompatibilityFrame, MultiColumnFrame, DeepReplaceFrame, ReverseUpdaterFrame
+from controllers import UpdaterController, ClearerController, CompatibilityController, MultiColumnController, DeepReplaceController, ReverseUpdaterController
 from core.excel_processor import ExcelProcessor
 from core.excel_cleaner import ExcelColumnClearer
 from core.excel_compatibility_processor import ExcelCompatibilityProcessor
 from core.multi_column_processor import MultiColumnExcelProcessor
 from core.deep_replace_processor import DeepReplaceProcessor
+from core.reverse_excel_processor import ReverseExcelProcessor
 
 class ExcelUpdaterApp:
     def __init__(self):
         self.root = tk.Tk()
-        self.root.title("Excel 工具集")
+        self.root.title("Momo——Build your mastersheet")
         self.root.geometry("480x500")
         self.root.configure(bg='#f0f0f0')
         
@@ -46,44 +47,74 @@ class ExcelUpdaterApp:
         )
         style.configure('TFrame', background='#f0f0f0')
 
+        # 移除选中 Tab 时的虚线框
+        style.layout('TNotebook.Tab', [('Notebook.tab', {'sticky': 'nswe', 'children': 
+            [('Notebook.padding', {'side': 'top', 'sticky': 'nswe', 'children': 
+                [('Notebook.label', {'side': 'top', 'sticky': ''})]
+            })]
+        })])
+
     def init_processors(self):
         self.excel_processor = ExcelProcessor(print)
         self.clearer = ExcelColumnClearer()
         self.compatibility_processor = ExcelCompatibilityProcessor()
         self.multi_processor = MultiColumnExcelProcessor(print)
         self.deep_replace_processor = DeepReplaceProcessor(print)
+        self.reverse_excel_processor = ReverseExcelProcessor(print)
 
     def init_components(self):
-        
-        # 列清空工具
-        clearer_controller = ClearerController(None, self.clearer)
-        clearer_frame = ClearerFrame(self.notebook, clearer_controller)
-        clearer_controller.frame = clearer_frame
-        self.notebook.add(clearer_frame, text='列清空')
+        # 创建主分类的 Frame
+        main_tools_frame = ttk.Frame(self.notebook)
+        utilities_frame = ttk.Frame(self.notebook)
 
+        # 将主 Frame 添加为顶级标签页
+        self.notebook.add(main_tools_frame, text='填表工具')
+        self.notebook.add(utilities_frame, text='辅助工具')
+
+        # --- 创建嵌套的 Notebook ---
+        main_notebook = ttk.Notebook(main_tools_frame)
+        main_notebook.pack(expand=True, fill='both', padx=5, pady=5)
+
+        utilities_notebook = ttk.Notebook(utilities_frame)
+        utilities_notebook.pack(expand=True, fill='both', padx=5, pady=5)
+
+        # --- 主要工具 ---
         # 批量更新工具
         updater_controller = UpdaterController(None, self.excel_processor)
-        updater_frame = UpdaterFrame(self.notebook, updater_controller)
+        updater_frame = UpdaterFrame(main_notebook, updater_controller)
         updater_controller.frame = updater_frame
-        self.notebook.add(updater_frame, text='批量更新')
+        main_notebook.add(updater_frame, text='Master到小表')
+
+        # 反向批量更新工具
+        reverse_updater_controller = ReverseUpdaterController(None, self.reverse_excel_processor)
+        reverse_updater_frame = ReverseUpdaterFrame(main_notebook, reverse_updater_controller)
+        reverse_updater_controller.frame = reverse_updater_frame
+        main_notebook.add(reverse_updater_frame, text='小表到Master')
 
         # 多列更新工具
         multi_controller = MultiColumnController(None, self.multi_processor)
-        multi_frame = MultiColumnFrame(self.notebook, multi_controller)
+        multi_frame = MultiColumnFrame(main_notebook, multi_controller)
         multi_controller.frame = multi_frame
-        self.notebook.add(multi_frame, text='多列更新')
+        main_notebook.add(multi_frame, text='多列更新')
 
-        # 深度替换工具
-        deep_replace_controller = DeepReplaceController(None, self.deep_replace_processor)
-        deep_replace_frame = DeepReplaceFrame(self.notebook, deep_replace_controller)
-        deep_replace_controller.frame = deep_replace_frame
-        self.notebook.add(deep_replace_frame, text='深度替换')
+        # --- 辅助工具 ---
+        # 列清空工具
+        clearer_controller = ClearerController(None, self.clearer)
+        clearer_frame = ClearerFrame(utilities_notebook, clearer_controller)
+        clearer_controller.frame = clearer_frame
+        utilities_notebook.add(clearer_frame, text='列清空')
 
         # 兼容性处理工具
         compatibility_controller = CompatibilityController(None, self.compatibility_processor)
-        compatibility_frame = CompatibilityFrame(self.notebook, compatibility_controller)
+        compatibility_frame = CompatibilityFrame(utilities_notebook, compatibility_controller)
         compatibility_controller.frame = compatibility_frame
-        self.notebook.add(compatibility_frame, text='兼容性处理')
+        utilities_notebook.add(compatibility_frame, text='兼容性处理')
+
+        # 深度替换工具
+        deep_replace_controller = DeepReplaceController(None, self.deep_replace_processor)
+        deep_replace_frame = DeepReplaceFrame(utilities_notebook, deep_replace_controller)
+        deep_replace_controller.frame = deep_replace_frame
+        utilities_notebook.add(deep_replace_frame, text='深度替换')
 
 
 
