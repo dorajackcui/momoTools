@@ -11,26 +11,30 @@ class ExcelProcessor:
         self.target_folder = ""
         self.log_callback = log_callback or (lambda msg: None)
         self.master_columns = []  # 存储列位置信息
-        self.match_column_index = 1  # 默认使用第二列作为匹配列
-        self.content_column_index = 3  # 默认使用第四列作为内容列（来自master表）
-        self.update_column_index = 2  # 默认更新第三列（目标文件的列）
+
+        self.target_key_col = 0      # 小表的key列
+        self.target_match_col = 1  # 小表的原文列
+        self.target_update_col = 2  # 小表的译文列
+
+        self.master_key_col = 1      # master的key列
+        self.master_match_col = 2  # master的原文列
+        self.master_content_col = 3  # master的默认译文列
+
         self.debug_keys = [
             "AD159EAE417F98EE46FCF697E15D4FFD",
             "clothesdes_10208"
         ]
 
-    def set_update_column(self, column_index):
-        """设置要更新的列索引（目标文件的列）"""
-        self.update_column_index = column_index
+    def set_target_column(self, target_match, target_update):
+        """设置要更新的列索引（小表的译文列）"""
+        self.target_match_col = target_match
+        self.target_update_col = target_update
 
-    def set_match_column(self, column_index):
-        """设置用于匹配的列索引"""
-        self.match_column_index = column_index
+    def set_master_column(self, master_match, master_content):
+        """设置用于匹配的列索引(小表的原文列)"""
+        self.master_match_col = master_match
+        self.master_content_col = master_content
         
-    def set_content_column(self, column_index):
-        """设置内容列索引（master表中的列）"""
-        self.content_column_index = column_index
-
     def set_master_file(self, file_path):
         self.master_file_path = file_path
 
@@ -67,7 +71,7 @@ class ExcelProcessor:
             self.log("正在读取 Master 文件...")
             master_start_time = time.time()
             # 优化：只读取必要的列，并直接指定数据类型为字符串
-            usecols = [1, self.match_column_index+1, self.content_column_index]  # 1是Key列(B列)
+            usecols = [1, self.master_match_col, self.master_content_col]  # 1是Key列(B列)
             master_df = pd.read_excel(
                 self.master_file_path,
                 engine='openpyxl',
@@ -147,12 +151,12 @@ class ExcelProcessor:
             
             # 获取目标列的索引
             key_col = 'A'  # 第一列
-            match_col = chr(ord('A') + self.match_column_index)  # 匹配列
+            match_col = chr(ord('A') + self.target_match_col)  # 匹配列
             for idx, row in enumerate(ws.rows, start=1):
                 try:
                     # 只读取需要的列
                     key_cell = row[0]
-                    match_cell = row[self.match_column_index]
+                    match_cell = row[self.target_match_col]
                     
                     # 确保单元格值转换为字符串
                     target_key = str(key_cell.value).strip() if key_cell.value else ''
@@ -166,7 +170,7 @@ class ExcelProcessor:
                     
                     # 使用combined key进行查找
                     if combined_key in master_dict:
-                        update_col = self.update_column_index + 1
+                        update_col = self.target_update_col + 1
                         updates[(idx, update_col)] = master_dict[combined_key]
                         updated += 1
 

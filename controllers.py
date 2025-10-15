@@ -35,14 +35,23 @@ class UpdaterController(BaseController):
             return
 
         try:
-            match_column = int(self.frame.match_column_var.get()) - 1
-            content_column = int(self.frame.content_column_var.get()) - 1
-            update_column = int(self.frame.update_column_var.get()) - 1
-            if match_column < 0 or content_column < 0 or update_column < 0:
+            # 获取小表列配置
+            target_key_col = int(self.frame.target_key_col_var.get()) - 1
+            target_match_col = int(self.frame.target_match_col_var.get()) - 1
+            target_content_col = int(self.frame.target_content_col_var.get()) - 1
+
+            # 获取 Master 表列配置
+            master_key_col = int(self.frame.master_key_col_var.get()) - 1
+            master_match_col = int(self.frame.master_match_col_var.get()) - 1
+            master_update_col = int(self.frame.master_update_col_var.get()) - 1
+
+            # 验证列索引
+            if any(c < 0 for c in [target_key_col, target_match_col, target_content_col, 
+                                     master_key_col, master_match_col, master_update_col]):
                 raise ValueError("列索引必须大于0")
-            self.processor.set_match_column(match_column)
-            self.processor.set_content_column(content_column)
-            self.processor.set_update_column(update_column)
+
+            self.processor.set_target_column(target_match_col, target_content_col)
+            self.processor.set_master_column(master_match_col, master_update_col)
         except ValueError as e:
             messagebox.showerror("错误", f"匹配列设置错误：{str(e)}")
             return
