@@ -25,13 +25,15 @@ class ExcelProcessor:
             "clothesdes_10208"
         ]
 
-    def set_target_column(self, target_match, target_update):
+    def set_target_column(self, target_key, target_match, target_update):
         """设置要更新的列索引（小表的译文列）"""
+        self.target_key_col = target_key
         self.target_match_col = target_match
         self.target_update_col = target_update
 
-    def set_master_column(self, master_match, master_content):
+    def set_master_column(self, master_key, master_match, master_content):
         """设置用于匹配的列索引(小表的原文列)"""
+        self.master_key_col = master_key
         self.master_match_col = master_match
         self.master_content_col = master_content
         
@@ -71,7 +73,7 @@ class ExcelProcessor:
             self.log("正在读取 Master 文件...")
             master_start_time = time.time()
             # 优化：只读取必要的列，并直接指定数据类型为字符串
-            usecols = [1, self.master_match_col, self.master_content_col]  # 1是Key列(B列)
+            usecols = [self.master_key_col, self.master_match_col, self.master_content_col] 
             master_df = pd.read_excel(
                 self.master_file_path,
                 engine='openpyxl',
@@ -148,14 +150,11 @@ class ExcelProcessor:
             # 使用openpyxl的只读模式读取文件
             wb = openpyxl.load_workbook(filename=file_path, read_only=True)
             ws = wb.active
-            
-            # 获取目标列的索引
-            key_col = 'A'  # 第一列
-            match_col = chr(ord('A') + self.target_match_col)  # 匹配列
+
             for idx, row in enumerate(ws.rows, start=1):
                 try:
                     # 只读取需要的列
-                    key_cell = row[0]
+                    key_cell = row[self.target_key_col]
                     match_cell = row[self.target_match_col]
                     
                     # 确保单元格值转换为字符串

@@ -50,8 +50,8 @@ class UpdaterController(BaseController):
                                      master_key_col, master_match_col, master_update_col]):
                 raise ValueError("列索引必须大于0")
 
-            self.processor.set_target_column(target_match_col, target_content_col)
-            self.processor.set_master_column(master_match_col, master_update_col)
+            self.processor.set_target_column(target_key_col, target_match_col, target_content_col)
+            self.processor.set_master_column(master_key_col, master_match_col, master_update_col)
         except ValueError as e:
             messagebox.showerror("错误", f"匹配列设置错误：{str(e)}")
             return
