@@ -1,13 +1,14 @@
 import tkinter as tk
 from tkinter import ttk
-from ui_components import UpdaterFrame, ClearerFrame, CompatibilityFrame, MultiColumnFrame, DeepReplaceFrame, ReverseUpdaterFrame
-from controllers import UpdaterController, ClearerController, CompatibilityController, MultiColumnController, DeepReplaceController, ReverseUpdaterController
+from ui_components import UpdaterFrame, ClearerFrame, CompatibilityFrame, MultiColumnFrame, DeepReplaceFrame, ReverseUpdaterFrame, UntranslatedStatsFrame
+from controllers import UpdaterController, ClearerController, CompatibilityController, MultiColumnController, DeepReplaceController, ReverseUpdaterController, UntranslatedStatsController
 from core.excel_processor import ExcelProcessor
 from core.excel_cleaner import ExcelColumnClearer
 from core.excel_compatibility_processor import ExcelCompatibilityProcessor
 from core.multi_column_processor import MultiColumnExcelProcessor
 from core.deep_replace_processor import DeepReplaceProcessor
 from core.reverse_excel_processor import ReverseExcelProcessor
+from core.untranslated_stats_processor import UntranslatedStatsProcessor
 
 class ExcelUpdaterApp:
     def __init__(self):
@@ -61,6 +62,7 @@ class ExcelUpdaterApp:
         self.multi_processor = MultiColumnExcelProcessor(print)
         self.deep_replace_processor = DeepReplaceProcessor(print)
         self.reverse_excel_processor = ReverseExcelProcessor(print)
+        self.untranslated_stats_processor = UntranslatedStatsProcessor(print)
 
     def init_components(self):
         # 创建主分类的 Frame
@@ -115,6 +117,12 @@ class ExcelUpdaterApp:
         deep_replace_frame = DeepReplaceFrame(utilities_notebook, deep_replace_controller)
         deep_replace_controller.frame = deep_replace_frame
         utilities_notebook.add(deep_replace_frame, text='深度替换')
+
+        # 统计未翻译字数工具
+        untranslated_stats_controller = UntranslatedStatsController(None, self.untranslated_stats_processor)
+        untranslated_stats_frame = UntranslatedStatsFrame(utilities_notebook, untranslated_stats_controller)
+        untranslated_stats_controller.frame = untranslated_stats_frame
+        utilities_notebook.add(untranslated_stats_frame, text='统计未翻译字数')
 
 
 

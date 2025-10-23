@@ -73,6 +73,69 @@ class UpdaterFrame(BaseFrame):
         btn_start = tk.Button(self, text="填充小表", **self.button_style, command=self.controller.process_files)
         btn_start.pack(pady=20)
 
+class UntranslatedStatsFrame(BaseFrame):
+    def __init__(self, parent, controller):
+        super().__init__(parent)
+        self.controller = controller
+        self.init_ui()
+
+    def init_ui(self):
+        # 文件夹选择按钮
+        btn_folder = tk.Button(self, text="选择小表文件夹", **self.button_style, command=self.controller.select_target_folder)
+        btn_folder.pack(pady=10)
+        self.folder_label = tk.Label(self, text="未选择文件夹", **self.label_style)
+        self.folder_label.pack()
+
+        # --- 列配置 ---
+        column_frame = ttk.LabelFrame(self, text="列配置", padding=(10, 5))
+        column_frame.pack(pady=10, padx=10, fill="x")
+
+        tk.Label(column_frame, text="原文列:").grid(row=0, column=0, sticky="w")
+        self.source_col_var = tk.StringVar(value="2")
+        tk.Entry(column_frame, textvariable=self.source_col_var, width=5).grid(row=0, column=1)
+
+        tk.Label(column_frame, text="译文列:").grid(row=0, column=2, sticky="w", padx=(10, 0))
+        self.translation_col_var = tk.StringVar(value="3")
+        tk.Entry(column_frame, textvariable=self.translation_col_var, width=5).grid(row=0, column=3)
+
+        # 输出文件选择
+        output_frame = tk.Frame(self, bg='#f0f0f0')
+        output_frame.pack(pady=10, fill="x", padx=10)
+        
+        btn_output = tk.Button(output_frame, text="选择输出文件", **self.button_style, command=self.controller.select_output_file)
+        btn_output.pack(side=tk.LEFT)
+        
+        self.output_label = tk.Label(output_frame, text="未选择输出文件", **self.label_style)
+        self.output_label.pack(side=tk.LEFT, padx=(10, 0))
+
+        # 执行按钮
+        btn_start = tk.Button(self, text="统计未翻译字数", **self.button_style, command=self.controller.process_stats)
+        btn_start.pack(pady=20)
+
+    def update_folder_label(self, folder_path):
+        """更新文件夹标签"""
+        if folder_path:
+            self.folder_label.config(text=f"已选择: {os.path.basename(folder_path)}")
+        else:
+            self.folder_label.config(text="未选择文件夹")
+
+    def update_output_label(self, output_path):
+        """更新输出文件标签"""
+        if output_path:
+            self.output_label.config(text=f"输出: {os.path.basename(output_path)}")
+        else:
+            self.output_label.config(text="未选择输出文件")
+
+    def get_column_config(self):
+        """获取列配置"""
+        try:
+            source_col = int(self.source_col_var.get()) - 1  # 转换为0索引
+            translation_col = int(self.translation_col_var.get()) - 1  # 转换为0索引
+            return source_col, translation_col
+        except ValueError:
+            messagebox.showerror("错误", "请输入有效的列号")
+            return None, None
+
 class ClearerFrame(BaseFrame):
     def __init__(self, parent, controller):
         super().__init__(parent)

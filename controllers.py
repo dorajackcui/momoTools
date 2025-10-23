@@ -265,3 +265,60 @@ class ReverseUpdaterController(BaseController):
             messagebox.showinfo("完成", f"共更新 {updated_count} 行。")
         except Exception as e:
             messagebox.showerror("处理失败", str(e))
+
+class UntranslatedStatsController(BaseController):
+    def __init__(self, frame, processor):
+        super().__init__(frame)
+        self.processor = processor
+        self.target_folder = ""
+        self.output_file = ""
+
+    def select_target_folder(self):
+        folder_path = filedialog.askdirectory(title="选择小表文件夹")
+        if folder_path:
+            self.target_folder = folder_path
+            self.frame.update_folder_label(folder_path)
+            self.processor.set_target_folder(folder_path)
+
+    def select_output_file(self):
+        file_path = filedialog.asksaveasfilename(
+            title="选择输出文件",
+            defaultextension=".xlsx",
+            filetypes=[("Excel 文件", "*.xlsx")]
+        )
+        if file_path:
+            self.output_file = file_path
+            self.frame.update_output_label(file_path)
+
+    def process_stats(self):
+        if not self.target_folder:
+            messagebox.showerror("错误", "请先选择小表文件夹！")
+            return
+
+        if not self.output_file:
+            messagebox.showerror("错误", "请先选择输出文件！")
+            return
+
+        # 获取列配置
+        source_col, translation_col = self.frame.get_column_config()
+        if source_col is None or translation_col is None:
+            return
+
+        try:
+            # 设置列配置
+            self.processor.set_columns(source_col, translation_col)
+            
+            # 处理统计
+            stats_results = self.processor.process_files()
+            
+            if not stats_results:
+                messagebox.showwarning("警告", "未找到任何Excel文件或所有文件都没有未翻译内容")
+                return
+            
+            # 导出结果
+            self.processor.export_to_excel(self.output_file)
+            
+            messagebox.showinfo("完成", f"统计完成！\n共处理 {len(stats_results)} 个文件\n结果已保存到: {self.output_file}")
+            
+        except Exception as e:
+            messagebox.showerror("错误", f"处理过程中发生错误：{str(e)}")
