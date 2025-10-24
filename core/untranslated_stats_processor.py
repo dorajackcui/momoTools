@@ -7,32 +7,35 @@ from collections import defaultdict
 class UntranslatedStatsProcessor:
     def __init__(self, log_callback=None):
         self.target_folder = ""
-        self.log_callback = log_callback or (lambda msg: None)
-        
-        # Column indices (0-based) - 可配置的列位置
-        self.source_text_col = 1    # B列：原文列（默认第2列，0-based索引为1）
-        self.translation_col = 2    # C列：译文列（默认第3列，0-based索引为2）
-        
-        # 统计结果
+        self.source_text_col = 1  # 默认第2列（0索引）
+        self.translation_col = 2  # 默认第3列（0索引）
+        self.stats_mode = "chinese_chars"  # 默认中文字符模式
         self.stats_results = []
+        self.log_callback = log_callback
 
     def set_target_folder(self, folder_path):
-        """设置目标文件夹路径"""
+        """设置目标文件夹"""
         self.target_folder = folder_path
 
     def set_columns(self, source_col, translation_col):
-        """设置原文列和译文列的索引（0-based）"""
+        """设置原文和译文列索引"""
         self.source_text_col = source_col
         self.translation_col = translation_col
 
+    def set_stats_mode(self, mode):
+        """设置统计模式"""
+        self.stats_mode = mode
+
     def log(self, message):
         """日志输出"""
-        self.log_callback(message)
+        if self.log_callback:
+            self.log_callback(message)
+        else:
+            print(message)
 
     def count_characters(self, text):
         """
-        计算文本字数（去除空格后）
-        支持中英文混合文本的字数统计
+        根据统计模式计算文本字数/词数
         """
         if not text or pd.isna(text):
             return 0
@@ -42,9 +45,17 @@ class UntranslatedStatsProcessor:
         if not text:
             return 0
         
-        # 只统计中文字符
-        chinese_characters = re.findall(r'[\u4e00-\u9fa5]', text)
-        return len(chinese_characters)
+        if self.stats_mode == "chinese_chars":
+            # 中文字符模式：只统计中文字符
+            chinese_characters = re.findall(r'[\u4e00-\u9fa5]', text)
+            return len(chinese_characters)
+        elif self.stats_mode == "english_words":
+            # 英文词模式：统计英文单词数
+            # 改良的正则表达式，支持撇号和连字符
+            english_words = re.findall(r'\b[a-zA-Z]+(?:[\'\-][a-zA-Z]+)*\b', text)
+            return len(english_words)
+        else:
+            return 0
 
     def is_translation_empty(self, translation):
         """
@@ -176,7 +187,12 @@ class UntranslatedStatsProcessor:
             total_untranslated_rows += untranslated_rows
         
         self.log(f"统计完成！")
-        self.log(f"总计：{total_untranslated_chars} 个未翻译字符，{total_untranslated_rows} 行未翻译内容")
+        if self.stats_mode == "chinese_chars":
+            self.log(f"总计：{total_untranslated_chars} 个未翻译字符，{total_untranslated_rows} 行未翻译内容")
+        elif self.stats_mode == "english_words":
+            self.log(f"总计：{total_untranslated_chars} 个未翻译词，{total_untranslated_rows} 行未翻译内容")
+        else:
+            self.log(f"总计：{total_untranslated_chars} 个未翻译字符，{total_untranslated_rows} 行未翻译内容")
         
         return self.stats_results
 
@@ -190,20 +206,33 @@ class UntranslatedStatsProcessor:
         try:
             # 创建DataFrame
             df = pd.DataFrame(self.stats_results)
-            df.columns = ['文件名', '未翻译字数', '未翻译行数', '总字数', '总行数']
+            
+            # 根据统计模式设置列标题
+            if self.stats_mode == "chinese_chars":
+                df.columns = ['文件名', '未翻译字数', '未翻译行数', '总字数', '总行数']
+                untranslated_col_name = '未翻译字数'
+                total_col_name = '总字数'
+            elif self.stats_mode == "english_words":
+                df.columns = ['文件名', '未翻译词数', '未翻译行数', '总词数', '总行数']
+                untranslated_col_name = '未翻译词数'
+                total_col_name = '总词数'
+            else:
+                df.columns = ['文件名', '未翻译字数', '未翻译行数', '总字数', '总行数']
+                untranslated_col_name = '未翻译字数'
+                total_col_name = '总字数'
             
             # 添加汇总行
-            total_untranslated_chars = df['未翻译字数'].sum()
+            total_untranslated_chars = df[untranslated_col_name].sum()
             total_untranslated_rows = df['未翻译行数'].sum()
-            total_chars = df['总字数'].sum()
+            total_chars = df[total_col_name].sum()
             total_rows = df['总行数'].sum()
             
             # 创建汇总行
             summary_row = pd.DataFrame({
                 '文件名': ['总计'],
-                '未翻译字数': [total_untranslated_chars],
+                untranslated_col_name: [total_untranslated_chars],
                 '未翻译行数': [total_untranslated_rows],
-                '总字数': [total_chars],
+                total_col_name: [total_chars],
                 '总行数': [total_rows]
             })
             
@@ -219,9 +248,9 @@ class UntranslatedStatsProcessor:
                 
                 # 设置列宽
                 worksheet.column_dimensions['A'].width = 30  # 文件名列
-                worksheet.column_dimensions['B'].width = 15  # 未翻译字数列
+                worksheet.column_dimensions['B'].width = 15  # 未翻译字数/词数列
                 worksheet.column_dimensions['C'].width = 15  # 未翻译行数列
-                worksheet.column_dimensions['D'].width = 15  # 总字数列
+                worksheet.column_dimensions['D'].width = 15  # 总字数/词数列
                 worksheet.column_dimensions['E'].width = 15  # 总行数列
                 
                 # 设置汇总行的样式（加粗）
@@ -249,4 +278,9 @@ class UntranslatedStatsProcessor:
         total_chars = sum(result['untranslated_chars'] for result in self.stats_results)
         total_rows = sum(result['untranslated_rows'] for result in self.stats_results)
         
-        return f"共处理 {total_files} 个文件，未翻译字数：{total_chars}，未翻译行数：{total_rows}"
+        if self.stats_mode == "chinese_chars":
+            return f"共处理 {total_files} 个文件，未翻译字数：{total_chars}，未翻译行数：{total_rows}"
+        elif self.stats_mode == "english_words":
+            return f"共处理 {total_files} 个文件，未翻译词数：{total_chars}，未翻译行数：{total_rows}"
+        else:
+            return f"共处理 {total_files} 个文件，未翻译字数：{total_chars}，未翻译行数：{total_rows}"

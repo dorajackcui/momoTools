@@ -299,14 +299,15 @@ class UntranslatedStatsController(BaseController):
             messagebox.showerror("错误", "请先选择输出文件！")
             return
 
-        # 获取列配置
-        source_col, translation_col = self.frame.get_column_config()
+        # 获取列配置和统计模式
+        source_col, translation_col, stats_mode = self.frame.get_column_config()
         if source_col is None or translation_col is None:
             return
 
         try:
-            # 设置列配置
+            # 设置列配置和统计模式
             self.processor.set_columns(source_col, translation_col)
+            self.processor.set_stats_mode(stats_mode)
             
             # 处理统计
             stats_results = self.processor.process_files()

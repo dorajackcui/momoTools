@@ -98,6 +98,17 @@ class UntranslatedStatsFrame(BaseFrame):
         self.translation_col_var = tk.StringVar(value="3")
         tk.Entry(column_frame, textvariable=self.translation_col_var, width=5).grid(row=0, column=3)
 
+        # --- 统计模式选择 ---
+        mode_frame = ttk.LabelFrame(self, text="统计模式", padding=(10, 5))
+        mode_frame.pack(pady=10, padx=10, fill="x")
+
+        self.stats_mode_var = tk.StringVar(value="chinese_chars")
+        
+        tk.Radiobutton(mode_frame, text="中文字符模式", variable=self.stats_mode_var, 
+                      value="chinese_chars").grid(row=0, column=0, sticky="w")
+        tk.Radiobutton(mode_frame, text="英文词模式", variable=self.stats_mode_var, 
+                      value="english_words").grid(row=0, column=1, sticky="w", padx=(20, 0))
+
         # 输出文件选择
         output_frame = tk.Frame(self, bg='#f0f0f0')
         output_frame.pack(pady=10, fill="x", padx=10)
@@ -127,14 +138,15 @@ class UntranslatedStatsFrame(BaseFrame):
             self.output_label.config(text="未选择输出文件")
 
     def get_column_config(self):
-        """获取列配置"""
+        """获取列配置和统计模式"""
         try:
             source_col = int(self.source_col_var.get()) - 1  # 转换为0索引
             translation_col = int(self.translation_col_var.get()) - 1  # 转换为0索引
-            return source_col, translation_col
+            stats_mode = self.stats_mode_var.get()
+            return source_col, translation_col, stats_mode
         except ValueError:
             messagebox.showerror("错误", "请输入有效的列号")
-            return None, None
+            return None, None, None
 
 class ClearerFrame(BaseFrame):
     def __init__(self, parent, controller):
