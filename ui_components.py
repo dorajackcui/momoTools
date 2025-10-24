@@ -238,53 +238,49 @@ class MultiColumnFrame(BaseFrame):
         self.folder_label = tk.Label(self, text="未选择文件夹", **self.label_style)
         self.folder_label.pack()
 
-        # 匹配列选择
-        match_frame = tk.Frame(self, bg='#f0f0f0')
-        match_frame.pack(pady=10)
-        tk.Label(match_frame, text="原文列：", **self.label_style).pack(side=tk.LEFT)
+        # --- 目标文件列配置 ---
+        target_frame = ttk.LabelFrame(self, text="目标文件列配置", padding=(10, 5))
+        target_frame.pack(pady=10, padx=10, fill="x")
+
+        tk.Label(target_frame, text="Key 列:").grid(row=0, column=0, sticky="w")
+        self.target_key_col_var = tk.StringVar(value="2")
+        tk.Entry(target_frame, textvariable=self.target_key_col_var, width=5).grid(row=0, column=1)
+
+        tk.Label(target_frame, text="匹配列:").grid(row=0, column=2, sticky="w", padx=(10, 0))
         self.match_column_var = tk.StringVar(value="3")
-        match_dropdown = tk.OptionMenu(match_frame, self.match_column_var, *["4", "3"])
-        match_dropdown.config(bg='#4a90e2', fg='white', font=('Arial', 10), width=5)
-        match_dropdown["menu"].config(bg='white', fg='#333333')
-        match_dropdown.pack(side=tk.LEFT)
-        tk.Label(match_frame, text="列（目标文件）", **self.label_style).pack(side=tk.LEFT)
+        tk.Entry(target_frame, textvariable=self.match_column_var, width=5).grid(row=0, column=3)
 
-        # 开始内容列选择
-        start_frame = tk.Frame(self, bg='#f0f0f0')
-        start_frame.pack(pady=10)
-        tk.Label(start_frame, text="开始内容列：", **self.label_style).pack(side=tk.LEFT)
-        self.start_column_var = tk.StringVar(value="5")
-        start_dropdown = tk.OptionMenu(start_frame, self.start_column_var, *["4","5"])
-        start_dropdown.config(bg='#4a90e2', fg='white', font=('Arial', 10), width=5)
-        start_dropdown["menu"].config(bg='white', fg='#333333')
-        start_dropdown.pack(side=tk.LEFT)
-        tk.Label(start_frame, text="列（Master表）", **self.label_style).pack(side=tk.LEFT)
-
-        # 更新开始列选择
-        update_frame = tk.Frame(self, bg='#f0f0f0')
-        update_frame.pack(pady=10)
-        tk.Label(update_frame, text="更新开始列：", **self.label_style).pack(side=tk.LEFT)
+        tk.Label(target_frame, text="更新开始列:").grid(row=0, column=4, sticky="w", padx=(10, 0))
         self.update_start_column_var = tk.StringVar(value="5")
-        update_dropdown = tk.OptionMenu(update_frame, self.update_start_column_var, *["4","5","6","7","8","9","10","11"])
-        update_dropdown.config(bg='#4a90e2', fg='white', font=('Arial', 10), width=5)
-        update_dropdown["menu"].config(bg='white', fg='#333333')
-        update_dropdown.pack(side=tk.LEFT)
-        tk.Label(update_frame, text="列（目标文件）", **self.label_style).pack(side=tk.LEFT)
-        
-        # 列数选择
-        count_frame = tk.Frame(self, bg='#f0f0f0')
-        count_frame.pack(pady=10)
-        tk.Label(count_frame, text="更新列数：", **self.label_style).pack(side=tk.LEFT)
+        tk.Entry(target_frame, textvariable=self.update_start_column_var, width=5).grid(row=0, column=5)
+
+        # --- Master 表列配置 ---
+        master_config_frame = ttk.LabelFrame(self, text="Master表列配置", padding=(10, 5))
+        master_config_frame.pack(pady=10, padx=10, fill="x")
+
+        tk.Label(master_config_frame, text="Key 列:").grid(row=0, column=0, sticky="w")
+        self.master_key_col_var = tk.StringVar(value="2")
+        tk.Entry(master_config_frame, textvariable=self.master_key_col_var, width=5).grid(row=0, column=1)
+
+        tk.Label(master_config_frame, text="匹配列:").grid(row=0, column=2, sticky="w", padx=(10, 0))
+        self.master_match_col_var = tk.StringVar(value="3")
+        tk.Entry(master_config_frame, textvariable=self.master_match_col_var, width=5).grid(row=0, column=3)
+
+        tk.Label(master_config_frame, text="内容开始列:").grid(row=0, column=4, sticky="w", padx=(10, 0))
+        self.start_column_var = tk.StringVar(value="5")
+        tk.Entry(master_config_frame, textvariable=self.start_column_var, width=5).grid(row=0, column=5)
+
+        # --- 处理参数配置 ---
+        params_frame = ttk.LabelFrame(self, text="处理参数", padding=(10, 5))
+        params_frame.pack(pady=10, padx=10, fill="x")
+
+        tk.Label(params_frame, text="更新列数:").grid(row=0, column=0, sticky="w")
         self.column_count_var = tk.StringVar(value="7")
-        count_dropdown = tk.OptionMenu(count_frame, self.column_count_var, *["8", "7", "1"])
-        count_dropdown.config(bg='#4a90e2', fg='white', font=('Arial', 10), width=5)
-        count_dropdown["menu"].config(bg='white', fg='#333333')
-        count_dropdown.pack(side=tk.LEFT)
-        tk.Label(count_frame, text="列", **self.label_style).pack(side=tk.LEFT)
+        tk.Entry(params_frame, textvariable=self.column_count_var, width=5).grid(row=0, column=1)
 
         # 执行按钮
         btn_start = tk.Button(self, text="开始处理", **self.button_style, command=self.controller.process_multi_column)
-        btn_start.pack(pady=10)
+        btn_start.pack(pady=20)
 
 class ReverseUpdaterFrame(BaseFrame):
     def __init__(self, parent, controller):

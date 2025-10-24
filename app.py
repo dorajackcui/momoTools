@@ -14,7 +14,7 @@ class ExcelUpdaterApp:
     def __init__(self):
         self.root = tk.Tk()
         self.root.title("Momo——Build your mastersheet")
-        self.root.geometry("480x500")
+        self.root.geometry("480x550")
         self.root.configure(bg='#f0f0f0')
         
         # 设置主题和样式
@@ -122,7 +122,7 @@ class ExcelUpdaterApp:
         untranslated_stats_controller = UntranslatedStatsController(None, self.untranslated_stats_processor)
         untranslated_stats_frame = UntranslatedStatsFrame(utilities_notebook, untranslated_stats_controller)
         untranslated_stats_controller.frame = untranslated_stats_frame
-        utilities_notebook.add(untranslated_stats_frame, text='统计未翻译字数')
+        utilities_notebook.add(untranslated_stats_frame, text='字数统计')
 
 
 

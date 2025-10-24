@@ -189,17 +189,31 @@ class MultiColumnController(BaseController):
 
     def process_multi_column(self):
         try:
-            match_column = int(self.frame.match_column_var.get()) - 1
-            start_column = int(self.frame.start_column_var.get()) - 1
-            update_start_column = int(self.frame.update_start_column_var.get()) - 1
+            # 获取目标文件列配置
+            target_key_col = int(self.frame.target_key_col_var.get()) - 1
+            target_match_col = int(self.frame.match_column_var.get()) - 1
+            target_update_start_col = int(self.frame.update_start_column_var.get()) - 1
+            
+            # 获取Master文件列配置
+            master_key_col = int(self.frame.master_key_col_var.get()) - 1
+            master_match_col = int(self.frame.master_match_col_var.get()) - 1
+            master_start_col = int(self.frame.start_column_var.get()) - 1
+            
+            # 获取处理参数
             column_count = int(self.frame.column_count_var.get())
             
-            if match_column < 0 or start_column < 0 or update_start_column < 0 or column_count <= 0:
+            # 验证列索引
+            if any(c < 0 for c in [target_key_col, target_match_col, target_update_start_col, 
+                                   master_key_col, master_match_col, master_start_col]) or column_count <= 0:
                 raise ValueError("列索引必须大于0，列数必须大于0")
-                
-            self.processor.set_match_column(match_column)
-            self.processor.set_start_column(start_column)
-            self.processor.set_update_start_column(update_start_column)
+            
+            # 配置处理器
+            self.processor.set_target_key_column(target_key_col)
+            self.processor.set_match_column(target_match_col)
+            self.processor.set_update_start_column(target_update_start_col)
+            self.processor.set_master_key_column(master_key_col)
+            self.processor.set_master_match_column(master_match_col)
+            self.processor.set_start_column(master_start_col)
             self.processor.set_column_count(column_count)
             
             updated_count = self.processor.process_files()

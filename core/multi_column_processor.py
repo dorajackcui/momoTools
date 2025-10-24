@@ -10,17 +10,35 @@ class MultiColumnExcelProcessor:
         self.master_file_path = ""
         self.target_folder = ""
         self.log_callback = log_callback or (lambda msg: None)
-        self.match_column_index = 1  # 默认使用第二列作为匹配列
-        self.start_column_index = 3  # 默认从第四列开始读取内容（来自master表）
-        self.update_start_column_index = 2  # 默认从第三列开始更新（目标文件的列）
-        self.column_count = 1  # 默认更新1列
+        # 目标文件列配置
+        self.target_key_column_index = 1  # 默认使用第二列作为Key列
+        self.match_column_index = 2  # 默认使用第三列作为匹配列
+        self.update_start_column_index = 4  # 默认从第五列开始更新（目标文件的列）
+        # Master文件列配置
+        self.master_key_column_index = 1  # 默认使用第二列作为Key列
+        self.master_match_column_index = 2  # 默认使用第三列作为匹配列
+        self.start_column_index = 4  # 默认从第五列开始读取内容（来自master表）
+        # 处理参数
+        self.column_count = 7  # 默认更新7列
         self.debug_keys = [
             "LDLG_Text_ZH_q101102_1_d1_cd_Line_14",
             "clothesdes_10208"
         ]
 
+    def set_target_key_column(self, column_index):
+        """设置目标文件的Key列索引"""
+        self.target_key_column_index = column_index
+        
+    def set_master_key_column(self, column_index):
+        """设置Master文件的Key列索引"""
+        self.master_key_column_index = column_index
+        
+    def set_master_match_column(self, column_index):
+        """设置Master文件的匹配列索引"""
+        self.master_match_column_index = column_index
+        
     def set_match_column(self, column_index):
-        """设置用于匹配的列索引"""
+        """设置目标文件用于匹配的列索引"""
         self.match_column_index = column_index
         
     def set_start_column(self, column_index):
@@ -72,16 +90,20 @@ class MultiColumnExcelProcessor:
             master_start_time = time.time()
             
             # 计算需要读取的列，确保索引有效
-            usecols = [1]  # 1是Key列(B列)
+            usecols = []
             
-            # 确保匹配列索引有效
-            match_col = max(1, self.match_column_index)  # 确保至少是第2列
-            if match_col not in usecols:  # 避免重复添加
-                usecols.append(match_col)
+            # 添加Master文件的Key列
+            master_key_col = max(0, self.master_key_column_index)
+            usecols.append(master_key_col)
+            
+            # 添加Master文件的匹配列
+            master_match_col = max(0, self.master_match_column_index)
+            if master_match_col not in usecols:
+                usecols.append(master_match_col)
             
             # 添加所有需要的内容列，确保索引有效
             for i in range(self.column_count):
-                content_col = max(2, self.start_column_index + i)  # 确保至少是第3列
+                content_col = max(0, self.start_column_index + i)
                 if content_col not in usecols:  # 避免重复添加
                     usecols.append(content_col)
             
@@ -119,6 +141,11 @@ class MultiColumnExcelProcessor:
         except Exception as e:
             raise Exception(f"读取 Master 文件失败：{e}")
 
+        # 创建列索引映射
+        col_mapping = {}
+        for i, col_idx in enumerate(usecols):
+            col_mapping[col_idx] = i
+        
         # 创建多列数据字典
         master_dict = {}
         master_data = master_df.values
@@ -128,15 +155,15 @@ class MultiColumnExcelProcessor:
                 if len(row) == 0:
                     continue
                     
-                # 安全获取key值
-                key = row[0].strip() if row[0] else ''
+                # 安全获取key值（使用映射后的索引）
+                key_idx = col_mapping.get(self.master_key_column_index, 0)
+                key = row[key_idx].strip() if key_idx < len(row) and row[key_idx] else ''
                 if not key:  # 跳过空key
                     continue
                     
-                # 安全获取匹配值
-                match_val = ''
-                if len(row) > 1:
-                    match_val = str(row[1]) if row[1] else ''
+                # 安全获取匹配值（使用映射后的索引）
+                match_idx = col_mapping.get(self.master_match_column_index, 1)
+                match_val = str(row[match_idx]) if match_idx < len(row) and row[match_idx] else ''
                 if not match_val:  # 跳过空匹配值
                     continue
                     
@@ -146,9 +173,10 @@ class MultiColumnExcelProcessor:
                 # 存储多列内容
                 content_values = []
                 for i in range(self.column_count):
-                    col_idx = 2 + i  # 从第三列开始是内容列
-                    if col_idx < len(row):
-                        content_values.append(str(row[col_idx]) if row[col_idx] else '')
+                    content_col_idx = self.start_column_index + i
+                    mapped_idx = col_mapping.get(content_col_idx, -1)
+                    if mapped_idx >= 0 and mapped_idx < len(row):
+                        content_values.append(str(row[mapped_idx]) if row[mapped_idx] else '')
                     else:
                         content_values.append('')  # 如果列不存在，添加空字符串
                 
@@ -202,18 +230,15 @@ class MultiColumnExcelProcessor:
             wb = openpyxl.load_workbook(filename=file_path, read_only=True)
             ws = wb.active
             
-            # 获取目标列的索引
-            key_col = 'B'  # 第2列
-            match_col = chr(ord('B') + self.match_column_index)  # 匹配列
             for idx, row in enumerate(ws.rows, start=1):
                 try:
                     # 安全获取单元格值
                     key_cell = None
                     match_cell = None
                     
-                    # 确保索引有效，key在B列
-                    if len(row) > 0:
-                        key_cell = row[1]
+                    # 确保索引有效，使用配置的Key列
+                    if len(row) > self.target_key_column_index:
+                        key_cell = row[self.target_key_column_index]
                     
                     if len(row) > self.match_column_index:
                         match_cell = row[self.match_column_index]
