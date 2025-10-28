@@ -246,7 +246,7 @@ class MultiColumnFrame(BaseFrame):
         self.target_key_col_var = tk.StringVar(value="2")
         tk.Entry(target_frame, textvariable=self.target_key_col_var, width=5).grid(row=0, column=1)
 
-        tk.Label(target_frame, text="匹配列:").grid(row=0, column=2, sticky="w", padx=(10, 0))
+        tk.Label(target_frame, text="原文列:").grid(row=0, column=2, sticky="w", padx=(10, 0))
         self.match_column_var = tk.StringVar(value="3")
         tk.Entry(target_frame, textvariable=self.match_column_var, width=5).grid(row=0, column=3)
 
@@ -262,7 +262,7 @@ class MultiColumnFrame(BaseFrame):
         self.master_key_col_var = tk.StringVar(value="2")
         tk.Entry(master_config_frame, textvariable=self.master_key_col_var, width=5).grid(row=0, column=1)
 
-        tk.Label(master_config_frame, text="匹配列:").grid(row=0, column=2, sticky="w", padx=(10, 0))
+        tk.Label(master_config_frame, text="原文列:").grid(row=0, column=2, sticky="w", padx=(10, 0))
         self.master_match_col_var = tk.StringVar(value="3")
         tk.Entry(master_config_frame, textvariable=self.master_match_col_var, width=5).grid(row=0, column=3)
 

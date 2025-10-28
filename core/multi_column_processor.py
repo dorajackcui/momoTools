@@ -12,11 +12,11 @@ class MultiColumnExcelProcessor:
         self.log_callback = log_callback or (lambda msg: None)
         # 目标文件列配置
         self.target_key_column_index = 1  # 默认使用第二列作为Key列
-        self.match_column_index = 2  # 默认使用第三列作为匹配列
+        self.match_column_index = 2  # 默认使用第三列作为原文列
         self.update_start_column_index = 4  # 默认从第五列开始更新（目标文件的列）
         # Master文件列配置
         self.master_key_column_index = 1  # 默认使用第二列作为Key列
-        self.master_match_column_index = 2  # 默认使用第三列作为匹配列
+        self.master_match_column_index = 2  # 默认使用第三列作为原文列
         self.start_column_index = 4  # 默认从第五列开始读取内容（来自master表）
         # 处理参数
         self.column_count = 7  # 默认更新7列
