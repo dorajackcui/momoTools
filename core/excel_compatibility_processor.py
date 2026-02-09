@@ -8,10 +8,20 @@ class ExcelCompatibilityProcessor:
     def set_folder_path(self, folder_path):
         self.folder_path = folder_path
 
+    def count_excel_files(self):
+        """计算需要处理的Excel文件总数"""
+        total = 0
+        for root, dirs, files in os.walk(self.folder_path):
+            for file in files:
+                if file.endswith(('.xlsx', '.xls')):
+                    total += 1
+        return total
+
     def process_files(self):
         if not self.folder_path:
             raise ValueError("请先设置有效的文件夹路径")
 
+        total_files = self.count_excel_files()
         processed_files = 0
         excel_app = None
 
@@ -35,6 +45,8 @@ class ExcelCompatibilityProcessor:
                                 wb.Close()
                                 wb = None  # 显式释放工作簿对象
                                 processed_files += 1
+                                # 输出进度
+                                print(f"处理进度: {processed_files}/{total_files} - 当前文件: {file}")
 
                         except Exception as e:
                             print(f"处理文件 {file} 时出错：{str(e)}")
@@ -53,4 +65,5 @@ class ExcelCompatibilityProcessor:
                 except:
                     pass
 
+        print(f"\n处理完成！共处理 {processed_files}/{total_files} 个文件")
         return processed_files

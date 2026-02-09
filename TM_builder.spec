@@ -3,7 +3,7 @@
 block_cipher = None
 
 a = Analysis(
-    ['main.py'],
+    ['app.py'],
     pathex=[],
     binaries=[],
     datas=[('刷表.ico', '.')],
