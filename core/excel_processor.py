@@ -249,11 +249,11 @@ class ExcelProcessor:
                 wb = None  # 显式释放工作簿对象
         except Exception as e:
             self.log(f"后处理文件 {os.path.basename(file_path)} 时出错：{str(e)}")
-        finally:
-            # 确保Excel实例被正确关闭和释放
-            if excel_app is not None:
-                try:
-                    excel_app.Quit()
-                    excel_app = None  # 显式释放Excel应用程序对象
-                except:
-                    pass
+        # finally:
+        #     # 确保Excel实例被正确关闭和释放
+        #     if excel_app is not None:
+        #         try:
+        #             excel_app.Quit()
+        #             excel_app = None  # 显式释放Excel应用程序对象
+        #         except:
+        #             pass
