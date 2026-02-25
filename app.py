@@ -14,7 +14,7 @@ class ExcelUpdaterApp:
     def __init__(self):
         self.root = tk.Tk()
         self.root.title("Momo——Build your mastersheet")
-        self.root.geometry("480x550")
+        self.root.geometry("480x600")
         self.root.configure(bg='#f0f0f0')
         
         # 设置主题和样式

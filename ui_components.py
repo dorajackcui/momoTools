@@ -2,6 +2,117 @@ import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
 import os
 
+
+class ToggleSwitch(tk.Frame):
+    def __init__(
+        self,
+        parent,
+        text,
+        variable,
+        on_color="#0078D4",
+        off_color="#E5E5E5",
+        bg="#f0f0f0",
+        font=("Segoe UI", 9),
+        command=None,
+    ):
+        super().__init__(parent, bg=bg)
+        self.variable = variable
+        self.on_color = on_color
+        self.off_color = off_color
+        self.track_border_on = "#0063B1"
+        self.track_border_off = "#A6A6A6"
+        self.knob_fill = "#FFFFFF"
+        self.knob_border = "#9B9B9B"
+        self.track_width = 40
+        self.track_height = 20
+        self.knob_padding = 2
+        self.command = command
+
+        self.canvas = tk.Canvas(
+            self,
+            width=self.track_width,
+            height=self.track_height,
+            bg=bg,
+            highlightthickness=0,
+            bd=0,
+        )
+        self.canvas.pack(side=tk.LEFT)
+
+        self.label = tk.Label(self, text=text, bg=bg, fg="#333333", font=font)
+        self.label.pack(side=tk.LEFT, padx=(8, 0))
+
+        self.canvas.bind("<Button-1>", self._toggle)
+        self.label.bind("<Button-1>", self._toggle)
+        self.bind("<Button-1>", self._toggle)
+
+        self._trace_id = self.variable.trace_add("write", self._on_var_changed)
+        self._draw()
+
+    def _draw(self):
+        self.canvas.delete("all")
+        w, h = self.track_width, self.track_height
+        padding = self.knob_padding
+        r = h // 2
+        track_color = self.on_color if self.variable.get() else self.off_color
+        border_color = self.track_border_on if self.variable.get() else self.track_border_off
+
+        self.canvas.create_oval(
+            0,
+            0,
+            h,
+            h,
+            fill=track_color,
+            outline=border_color,
+            width=1,
+        )
+        self.canvas.create_rectangle(
+            r,
+            0,
+            w - r,
+            h,
+            fill=track_color,
+            outline=border_color,
+            width=1,
+        )
+        self.canvas.create_oval(
+            w - h,
+            0,
+            w,
+            h,
+            fill=track_color,
+            outline=border_color,
+            width=1,
+        )
+
+        knob_size = h - padding * 2
+        knob_x = (w - padding - knob_size) if self.variable.get() else padding
+        self.canvas.create_oval(
+            knob_x,
+            padding,
+            knob_x + knob_size,
+            padding + knob_size,
+            fill=self.knob_fill,
+            outline=self.knob_border,
+            width=1,
+        )
+
+    def _toggle(self, _event=None):
+        self.variable.set(not self.variable.get())
+        if self.command is not None:
+            self.command()
+
+    def _on_var_changed(self, *_args):
+        self._draw()
+
+    def destroy(self):
+        if hasattr(self, "_trace_id"):
+            try:
+                self.variable.trace_remove("write", self._trace_id)
+            except Exception:
+                pass
+        super().destroy()
+
+
 class BaseFrame(ttk.Frame):
     def __init__(self, parent):
         super().__init__(parent)
@@ -17,6 +128,19 @@ class BaseFrame(ttk.Frame):
             'fg': '#333333',
             'font': ('Arial', 10)
         }
+
+    def create_toggle(self, text, variable, pady=(0, 0), parent=None, command=None):
+        toggle_parent = parent or self
+        toggle = ToggleSwitch(
+            toggle_parent,
+            text=text,
+            variable=variable,
+            bg='#f0f0f0',
+            font=('Arial', 10),
+            command=command,
+        )
+        toggle.pack(anchor="w", padx=10, pady=pady)
+        return toggle
 
 class UpdaterFrame(BaseFrame):
     def __init__(self, parent, controller):
@@ -67,6 +191,20 @@ class UpdaterFrame(BaseFrame):
         tk.Label(master_config_frame, text="译文列:").grid(row=0, column=4, sticky="w", padx=(10, 0))
         self.master_update_col_var = tk.StringVar(value="4")
         tk.Entry(master_config_frame, textvariable=self.master_update_col_var, width=5).grid(row=0, column=5)
+
+        self.post_process_var = tk.BooleanVar(value=True)
+        self.create_toggle(
+            text="启用后处理（兼容性保存）",
+            variable=self.post_process_var,
+            pady=(5, 5),
+        )
+
+        self.fill_blank_var = tk.BooleanVar(value=False)
+        self.create_toggle(
+            text="仅填空（关闭=覆盖）",
+            variable=self.fill_blank_var,
+            pady=(0, 5),
+        )
 
 
         # 执行按钮
@@ -278,6 +416,20 @@ class MultiColumnFrame(BaseFrame):
         self.column_count_var = tk.StringVar(value="7")
         tk.Entry(params_frame, textvariable=self.column_count_var, width=5).grid(row=0, column=1)
 
+        self.post_process_var = tk.BooleanVar(value=True)
+        self.create_toggle(
+            text="启用后处理（兼容性保存）",
+            variable=self.post_process_var,
+            pady=(5, 5),
+        )
+
+        self.fill_blank_var = tk.BooleanVar(value=False)
+        self.create_toggle(
+            text="仅填空（关闭=覆盖）",
+            variable=self.fill_blank_var,
+            pady=(0, 5),
+        )
+
         # 执行按钮
         btn_start = tk.Button(self, text="开始处理", **self.button_style, command=self.controller.process_multi_column)
         btn_start.pack(pady=20)
@@ -332,6 +484,13 @@ class ReverseUpdaterFrame(BaseFrame):
         tk.Label(master_config_frame, text="译文列:").grid(row=0, column=4, sticky="w", padx=(10, 0))
         self.master_update_col_var = tk.StringVar(value="4")
         tk.Entry(master_config_frame, textvariable=self.master_update_col_var, width=5).grid(row=0, column=5)
+
+        self.fill_blank_var = tk.BooleanVar(value=False)
+        self.create_toggle(
+            text="仅填空（关闭=覆盖）",
+            variable=self.fill_blank_var,
+            pady=(5, 5),
+        )
 
         # 执行按钮
         btn_start = tk.Button(self, text="填充master表", **self.button_style, command=self.controller.process_files)

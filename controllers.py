@@ -57,6 +57,8 @@ class UpdaterController(BaseController):
             return
 
         try:
+            self.processor.set_fill_blank_only(self.frame.fill_blank_var.get())
+            self.processor.set_post_process_enabled(self.frame.post_process_var.get())
             updated_count = self.processor.process_files()
             messagebox.showinfo("完成", f"共更新 {updated_count} 行。")
         except Exception as e:
@@ -215,6 +217,8 @@ class MultiColumnController(BaseController):
             self.processor.set_master_match_column(master_match_col)
             self.processor.set_start_column(master_start_col)
             self.processor.set_column_count(column_count)
+            self.processor.set_fill_blank_only(self.frame.fill_blank_var.get())
+            self.processor.set_post_process_enabled(self.frame.post_process_var.get())
             
             updated_count = self.processor.process_files()
             messagebox.showinfo("完成", f"共更新 {updated_count} 处数据。")
@@ -269,6 +273,7 @@ class ReverseUpdaterController(BaseController):
             # 配置处理器
             self.processor.set_target_columns(target_key_col, target_match_col, target_content_col)
             self.processor.set_master_columns(master_key_col, master_match_col, master_update_col)
+            self.processor.set_fill_blank_only(self.frame.fill_blank_var.get())
 
         except ValueError as e:
             messagebox.showerror("错误", f"列配置错误：{str(e)}")

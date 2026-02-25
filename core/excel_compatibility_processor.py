@@ -1,68 +1,77 @@
-import os
 from win32com.client import Dispatch
+
+from core.kernel import ErrorEvent, EventLogger, ModeIOContract, ProcessingStats, iter_excel_files
+
 
 class ExcelCompatibilityProcessor:
     def __init__(self):
         self.folder_path = ""
+        self.log_callback = print
+        self.io_contract = ModeIOContract(
+            mode_name="compatibility_processor",
+            skip_header=False,
+        )
+        self.stats = ProcessingStats()
+        self.event_logger = EventLogger(self.log_callback, self.io_contract.mode_name)
 
     def set_folder_path(self, folder_path):
         self.folder_path = folder_path
 
     def count_excel_files(self):
-        """计算需要处理的Excel文件总数"""
-        total = 0
-        for root, dirs, files in os.walk(self.folder_path):
-            for file in files:
-                if file.endswith(('.xlsx', '.xls')):
-                    total += 1
-        return total
+        return len(
+            iter_excel_files(
+                self.folder_path,
+                extensions=self.io_contract.extensions,
+                case_sensitive=True,
+            )
+        )
+
+    def _log_error(self, code, message, file_path="", exc=None):
+        event = ErrorEvent(code=code, message=message, file_path=file_path, exception=exc)
+        self.event_logger.error(self.stats, event)
 
     def process_files(self):
         if not self.folder_path:
             raise ValueError("请先设置有效的文件夹路径")
 
-        total_files = self.count_excel_files()
+        file_paths = iter_excel_files(
+            self.folder_path,
+            extensions=self.io_contract.extensions,
+            case_sensitive=True,
+        )
+        total_files = len(file_paths)
         processed_files = 0
         excel_app = None
 
         try:
-            # 创建Excel应用实例
-            excel_app = Dispatch('Excel.Application')
+            excel_app = Dispatch("Excel.Application")
             excel_app.Visible = False
             excel_app.DisplayAlerts = False
 
-            # 遍历目标文件夹中的所有Excel文件
-            for root, dirs, files in os.walk(self.folder_path):
-                for file in files:
-                    if file.endswith(('.xlsx', '.xls')):
-                        file_path = os.path.join(root, file)
+            for file_path in file_paths:
+                file_name = file_path.split("\\")[-1]
+                try:
+                    wb = excel_app.Workbooks.Open(file_path)
+                    if wb is not None:
+                        wb.Save()
+                        wb.Close()
+                        wb = None
+                        processed_files += 1
+                        print(f"处理进度: {processed_files}/{total_files} - 当前文件: {file_name}")
+                except Exception as exc:
+                    print(f"处理文件 {file_name} 时报错：{str(exc)}")
+                    self._log_error("E_COMPAT_FILE", "兼容性处理失败", file_path=file_path, exc=exc)
+                    if "wb" in locals():
                         try:
-                            # 使用COM接口打开工作簿
-                            wb = excel_app.Workbooks.Open(file_path)
-                            if wb is not None:
-                                # 保存并关闭工作簿
-                                wb.Save()
-                                wb.Close()
-                                wb = None  # 显式释放工作簿对象
-                                processed_files += 1
-                                # 输出进度
-                                print(f"处理进度: {processed_files}/{total_files} - 当前文件: {file}")
-
-                        except Exception as e:
-                            print(f"处理文件 {file} 时出错：{str(e)}")
-                            if 'wb' in locals():
-                                try:
-                                    wb.Close(False)
-                                except:
-                                    pass
-                            continue
-
+                            wb.Close(False)
+                        except Exception:
+                            pass
+                    continue
         finally:
-            # 确保Excel实例被正确关闭
             if excel_app is not None:
                 try:
                     excel_app.Quit()
-                except:
+                except Exception:
                     pass
 
         print(f"\n处理完成！共处理 {processed_files}/{total_files} 个文件")

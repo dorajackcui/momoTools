@@ -1,0 +1,32 @@
+{
+  "cases": [
+    {
+      "name": "single_update_master_to_target",
+      "expected": "tests/golden/fixtures/single_update/expected/target.xlsx",
+      "actual": "tests/golden/fixtures/single_update/actual/target.xlsx",
+      "sheet": "active",
+      "max_diff_samples": 200
+    },
+    {
+      "name": "multi_update_master_to_target",
+      "expected": "tests/golden/fixtures/multi_update/expected/target.xlsx",
+      "actual": "tests/golden/fixtures/multi_update/actual/target.xlsx",
+      "sheet": "active",
+      "max_diff_samples": 200
+    },
+    {
+      "name": "reverse_update_target_to_master",
+      "expected": "tests/golden/fixtures/reverse_update/expected/master.xlsx",
+      "actual": "tests/golden/fixtures/reverse_update/actual/master.xlsx",
+      "sheet": "active",
+      "max_diff_samples": 200
+    },
+    {
+      "name": "untranslated_stats_export",
+      "expected": "tests/golden/fixtures/untranslated_stats/expected/output.xlsx",
+      "actual": "tests/golden/fixtures/untranslated_stats/actual/output.xlsx",
+      "sheet": "未翻译统计",
+      "max_diff_samples": 200
+    }
+  ]
+}
