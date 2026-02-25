@@ -1,344 +1,384 @@
-from tkinter import filedialog, messagebox
-import os
+from tkinter import filedialog
+
+from ui import strings
+from ui.dialog_service import DialogService
+from ui.validators import ValidationError
+
 
 class BaseController:
-    def __init__(self, frame):
+    def __init__(self, frame, dialog_service=None):
         self.frame = frame
+        self.dialogs = dialog_service or DialogService()
+
+    def _require_frame(self):
+        if self.frame is None:
+            raise RuntimeError("UI frame is not attached")
+        return self.frame
+
+    @staticmethod
+    def _ask_excel_file(title):
+        return filedialog.askopenfilename(
+            title=title,
+            filetypes=[("Excel 文件", "*.xlsx *.xls")],
+        )
+
+    @staticmethod
+    def _ask_folder(title):
+        return filedialog.askdirectory(title=title)
+
+    @staticmethod
+    def _ask_output_excel_file(title):
+        return filedialog.asksaveasfilename(
+            title=title,
+            defaultextension=".xlsx",
+            filetypes=[("Excel 文件", "*.xlsx")],
+        )
+
 
 class UpdaterController(BaseController):
-    def __init__(self, frame, processor):
-        super().__init__(frame)
-        self.processor = processor
+    def __init__(self, frame, single_processor, multi_processor, dialog_service=None):
+        super().__init__(frame, dialog_service=dialog_service)
+        self.single_processor = single_processor
+        self.multi_processor = multi_processor
         self.master_file_path = ""
         self.target_folder = ""
 
     def select_master_file(self):
-        file_path = filedialog.askopenfilename(
-            title="选择 Master 总表",
-            filetypes=[("Excel 文件", "*.xlsx *.xls")]
-        )
-        if file_path:
-            self.master_file_path = file_path
-            self.frame.master_label.config(text=f"已选择：{os.path.basename(file_path)}")
-            self.processor.set_master_file(file_path)
+        file_path = self._ask_excel_file("选择 Master 总表")
+        if not file_path:
+            return
+        self.master_file_path = file_path
+        self._require_frame().set_master_file_label(file_path)
+        self.single_processor.set_master_file(file_path)
+        self.multi_processor.set_master_file(file_path)
 
     def select_target_folder(self):
-        folder_path = filedialog.askdirectory(title="选择目标文件夹")
-        if folder_path:
-            self.target_folder = folder_path
-            self.frame.folder_label.config(text=f"已选择：{os.path.basename(folder_path)}")
-            self.processor.set_target_folder(folder_path)
+        folder_path = self._ask_folder("选择目标文件夹")
+        if not folder_path:
+            return
+        self.target_folder = folder_path
+        self._require_frame().set_target_folder_label(folder_path)
+        self.single_processor.set_target_folder(folder_path)
+        self.multi_processor.set_target_folder(folder_path)
 
     def process_files(self):
         if not self.master_file_path or not self.target_folder:
-            messagebox.showerror("错误", "请先选择 Master 文件和目标文件夹！")
+            self.dialogs.error(strings.ERROR_TITLE, strings.REQUIRE_MASTER_TARGET)
             return
 
         try:
-            # 获取小表列配置
-            target_key_col = int(self.frame.target_key_col_var.get()) - 1
-            target_match_col = int(self.frame.target_match_col_var.get()) - 1
-            target_content_col = int(self.frame.target_content_col_var.get()) - 1
-
-            # 获取 Master 表列配置
-            master_key_col = int(self.frame.master_key_col_var.get()) - 1
-            master_match_col = int(self.frame.master_match_col_var.get()) - 1
-            master_update_col = int(self.frame.master_update_col_var.get()) - 1
-
-            # 验证列索引
-            if any(c < 0 for c in [target_key_col, target_match_col, target_content_col, 
-                                     master_key_col, master_match_col, master_update_col]):
-                raise ValueError("列索引必须大于0")
-
-            self.processor.set_target_column(target_key_col, target_match_col, target_content_col)
-            self.processor.set_master_column(master_key_col, master_match_col, master_update_col)
-        except ValueError as e:
-            messagebox.showerror("错误", f"匹配列设置错误：{str(e)}")
+            config = self._require_frame().get_config()
+        except ValidationError as exc:
+            self.dialogs.error(strings.ERROR_TITLE, f"{strings.VALIDATION_CONFIG_PREFIX}{exc}")
+            return
+        except Exception as exc:
+            self.dialogs.error(strings.ERROR_TITLE, str(exc))
             return
 
         try:
-            self.processor.set_fill_blank_only(self.frame.fill_blank_var.get())
-            self.processor.set_post_process_enabled(self.frame.post_process_var.get())
-            updated_count = self.processor.process_files()
-            messagebox.showinfo("完成", f"共更新 {updated_count} 行。")
-        except Exception as e:
-            messagebox.showerror("错误", str(e))
+            if config.column_count == 1:
+                self.single_processor.set_target_column(
+                    config.target_key_col,
+                    config.target_match_col,
+                    config.target_update_start_col,
+                )
+                self.single_processor.set_master_column(
+                    config.master_key_col,
+                    config.master_match_col,
+                    config.master_content_start_col,
+                )
+                self.single_processor.set_fill_blank_only(config.fill_blank_only)
+                self.single_processor.set_post_process_enabled(config.post_process_enabled)
+                updated_count = self.single_processor.process_files()
+            else:
+                self.multi_processor.set_target_key_column(config.target_key_col)
+                self.multi_processor.set_match_column(config.target_match_col)
+                self.multi_processor.set_update_start_column(config.target_update_start_col)
+                self.multi_processor.set_master_key_column(config.master_key_col)
+                self.multi_processor.set_master_match_column(config.master_match_col)
+                self.multi_processor.set_start_column(config.master_content_start_col)
+                self.multi_processor.set_column_count(config.column_count)
+                self.multi_processor.set_fill_blank_only(config.fill_blank_only)
+                self.multi_processor.set_post_process_enabled(config.post_process_enabled)
+                updated_count = self.multi_processor.process_files()
+
+            self.dialogs.info(strings.SUCCESS_TITLE, f"共更新 {updated_count} 处数据。")
+        except Exception as exc:
+            self.dialogs.error(strings.ERROR_TITLE, str(exc))
+
 
 class ClearerController(BaseController):
-    def __init__(self, frame, clearer):
-        super().__init__(frame)
+    def __init__(self, frame, clearer, dialog_service=None):
+        super().__init__(frame, dialog_service=dialog_service)
         self.clearer = clearer
+        self.target_folder = ""
 
     def select_clearer_folder(self):
-        folder_path = filedialog.askdirectory(title="选择目标文件夹")
-        if folder_path:
-            self.frame.folder_label.config(text=f"已选择：{os.path.basename(folder_path)}")
-            self.clearer.set_folder_path(folder_path)
+        folder_path = self._ask_folder("选择目标文件夹")
+        if not folder_path:
+            return
+        self.target_folder = folder_path
+        self._require_frame().set_target_folder_label(folder_path)
+        self.clearer.set_folder_path(folder_path)
 
-    def clear_column(self):
+    def _with_column_config(self, action, success_template, confirm_message=None):
+        if not self.target_folder:
+            self.dialogs.error(strings.ERROR_TITLE, strings.REQUIRE_TARGET_FOLDER)
+            return
+
         try:
-            column_number = int(self.frame.column_var.get())
-            if column_number <= 0:
-                raise ValueError("列号必须大于0")
-            self.clearer.set_column_number(column_number)
-            processed_files = self.clearer.clear_column_in_files()
-            messagebox.showinfo("完成", f"共处理 {processed_files} 个文件。")
-        except ValueError as e:
-            messagebox.showerror("错误", f"列号设置错误：{str(e)}")
-        except Exception as e:
-            messagebox.showerror("错误", str(e))
+            config = self._require_frame().get_config()
+            self.clearer.set_column_number(config.column_number)
+        except ValidationError as exc:
+            self.dialogs.error(strings.ERROR_TITLE, f"{strings.VALIDATION_COLUMN_PREFIX}{exc}")
+            return
+        except Exception as exc:
+            self.dialogs.error(strings.ERROR_TITLE, str(exc))
+            return
 
-    def insert_column(self):
-        try:
-            column_number = int(self.frame.column_var.get())
-            if column_number <= 0:
-                raise ValueError("列号必须大于0")
-            self.clearer.set_column_number(column_number)
-            processed_files = self.clearer.insert_column_in_files()
-            messagebox.showinfo("完成", f"共处理 {processed_files} 个文件。")
-        except ValueError as e:
-            messagebox.showerror("错误", f"列号设置错误：{str(e)}")
-        except Exception as e:
-            messagebox.showerror("错误", str(e))
-
-    def delete_column(self):
-        try:
-            column_number = int(self.frame.column_var.get())
-            if column_number <= 0:
-                raise ValueError("列号必须大于0")
-            self.clearer.set_column_number(column_number)
-
-            confirm = messagebox.askyesno("确认操作", f"确定要删除所有Excel文件的第{column_number}列吗？\n此操作不可撤销！")
-            if not confirm:
+        if confirm_message:
+            if not self.dialogs.confirm(strings.CONFIRM_TITLE, confirm_message.format(column_number=config.column_number)):
                 return
 
-            processed_files = self.clearer.delete_column_in_files()
-            messagebox.showinfo("完成", f"共处理 {processed_files} 个文件。")
-        except ValueError as e:
-            messagebox.showerror("错误", f"列号设置错误：{str(e)}")
-        except Exception as e:
-            messagebox.showerror("错误", str(e))
+        try:
+            processed_files = action()
+            self.dialogs.info(strings.SUCCESS_TITLE, success_template.format(processed_files=processed_files))
+        except Exception as exc:
+            self.dialogs.error(strings.ERROR_TITLE, str(exc))
+
+    def clear_column(self):
+        self._with_column_config(
+            action=self.clearer.clear_column_in_files,
+            success_template="共处理 {processed_files} 个文件。",
+        )
+
+    def insert_column(self):
+        self._with_column_config(
+            action=self.clearer.insert_column_in_files,
+            success_template="共处理 {processed_files} 个文件。",
+        )
+
+    def delete_column(self):
+        self._with_column_config(
+            action=self.clearer.delete_column_in_files,
+            success_template="共处理 {processed_files} 个文件。",
+            confirm_message="确定要删除所有Excel文件的第{column_number}列吗？\n此操作不可撤销！",
+        )
+
 
 class CompatibilityController(BaseController):
-    def __init__(self, frame, processor):
-        super().__init__(frame)
+    def __init__(self, frame, processor, dialog_service=None):
+        super().__init__(frame, dialog_service=dialog_service)
         self.processor = processor
+        self.target_folder = ""
 
     def select_compatibility_folder(self):
-        folder_path = filedialog.askdirectory(title="选择目标文件夹")
-        if folder_path:
-            self.frame.folder_label.config(text=f"已选择：{os.path.basename(folder_path)}")
-            self.processor.set_folder_path(folder_path)
+        folder_path = self._ask_folder("选择目标文件夹")
+        if not folder_path:
+            return
+        self.target_folder = folder_path
+        self._require_frame().set_target_folder_label(folder_path)
+        self.processor.set_folder_path(folder_path)
 
     def process_compatibility(self):
+        if not self.target_folder:
+            self.dialogs.error(strings.ERROR_TITLE, strings.REQUIRE_TARGET_FOLDER)
+            return
+
         try:
             processed_files = self.processor.process_files()
-            messagebox.showinfo("完成", f"共处理 {processed_files} 个文件。")
-        except Exception as e:
-            messagebox.showerror("错误", str(e))
+            self.dialogs.info(strings.SUCCESS_TITLE, f"共处理 {processed_files} 个文件。")
+        except Exception as exc:
+            self.dialogs.error(strings.ERROR_TITLE, str(exc))
+
 
 class DeepReplaceController(BaseController):
-    def __init__(self, frame, processor):
-        super().__init__(frame)
+    def __init__(self, frame, processor, dialog_service=None):
+        super().__init__(frame, dialog_service=dialog_service)
         self.processor = processor
         self.source_folder = ""
         self.target_folder = ""
 
     def select_source_folder(self):
-        folder_path = filedialog.askdirectory(title="选择源文件夹")
-        if folder_path:
-            self.source_folder = folder_path
-            self.frame.source_label.config(text=f"已选择：{os.path.basename(folder_path)}")
-            self.processor.set_source_folder(folder_path)
+        folder_path = self._ask_folder("选择源文件夹")
+        if not folder_path:
+            return
+        self.source_folder = folder_path
+        self._require_frame().set_source_folder_label(folder_path)
+        self.processor.set_source_folder(folder_path)
 
     def select_target_folder(self):
-        folder_path = filedialog.askdirectory(title="选择目标文件夹")
-        if folder_path:
-            self.target_folder = folder_path
-            self.frame.target_label.config(text=f"已选择：{os.path.basename(folder_path)}")
-            self.processor.set_target_folder(folder_path)
+        folder_path = self._ask_folder("选择目标文件夹")
+        if not folder_path:
+            return
+        self.target_folder = folder_path
+        self._require_frame().set_target_folder_label(folder_path)
+        self.processor.set_target_folder(folder_path)
 
     def process_files(self):
         if not self.source_folder or not self.target_folder:
-            messagebox.showerror("错误", "请先选择源文件夹和目标文件夹！")
+            self.dialogs.error(strings.ERROR_TITLE, strings.REQUIRE_SOURCE_TARGET)
             return
 
         try:
             processed_files = self.processor.process_files()
-            messagebox.showinfo("完成", f"共处理 {processed_files} 个文件。")
-        except Exception as e:
-            messagebox.showerror("错误", str(e))
+            self.dialogs.info(strings.SUCCESS_TITLE, f"共处理 {processed_files} 个文件。")
+        except Exception as exc:
+            self.dialogs.error(strings.ERROR_TITLE, str(exc))
+
 
 class MultiColumnController(BaseController):
-    def __init__(self, frame, processor):
-        super().__init__(frame)
+    def __init__(self, frame, processor, dialog_service=None):
+        super().__init__(frame, dialog_service=dialog_service)
         self.processor = processor
+        self.master_file_path = ""
+        self.target_folder = ""
 
     def select_multi_master_file(self):
-        file_path = filedialog.askopenfilename(
-            title="选择 Master 总表",
-            filetypes=[("Excel 文件", "*.xlsx *.xls")]
-        )
-        if file_path:
-            self.frame.master_label.config(text=f"已选择：{os.path.basename(file_path)}")
-            self.processor.set_master_file(file_path)
+        file_path = self._ask_excel_file("选择 Master 总表")
+        if not file_path:
+            return
+        self.master_file_path = file_path
+        self._require_frame().set_master_file_label(file_path)
+        self.processor.set_master_file(file_path)
 
     def select_multi_target_folder(self):
-        folder_path = filedialog.askdirectory(title="选择目标文件夹")
-        if folder_path:
-            self.frame.folder_label.config(text=f"已选择：{os.path.basename(folder_path)}")
-            self.processor.set_target_folder(folder_path)
+        folder_path = self._ask_folder("选择目标文件夹")
+        if not folder_path:
+            return
+        self.target_folder = folder_path
+        self._require_frame().set_target_folder_label(folder_path)
+        self.processor.set_target_folder(folder_path)
 
     def process_multi_column(self):
+        if not self.master_file_path or not self.target_folder:
+            self.dialogs.error(strings.ERROR_TITLE, strings.REQUIRE_MASTER_TARGET)
+            return
+
         try:
-            # 获取目标文件列配置
-            target_key_col = int(self.frame.target_key_col_var.get()) - 1
-            target_match_col = int(self.frame.match_column_var.get()) - 1
-            target_update_start_col = int(self.frame.update_start_column_var.get()) - 1
-            
-            # 获取Master文件列配置
-            master_key_col = int(self.frame.master_key_col_var.get()) - 1
-            master_match_col = int(self.frame.master_match_col_var.get()) - 1
-            master_start_col = int(self.frame.start_column_var.get()) - 1
-            
-            # 获取处理参数
-            column_count = int(self.frame.column_count_var.get())
-            
-            # 验证列索引
-            if any(c < 0 for c in [target_key_col, target_match_col, target_update_start_col, 
-                                   master_key_col, master_match_col, master_start_col]) or column_count <= 0:
-                raise ValueError("列索引必须大于0，列数必须大于0")
-            
-            # 配置处理器
-            self.processor.set_target_key_column(target_key_col)
-            self.processor.set_match_column(target_match_col)
-            self.processor.set_update_start_column(target_update_start_col)
-            self.processor.set_master_key_column(master_key_col)
-            self.processor.set_master_match_column(master_match_col)
-            self.processor.set_start_column(master_start_col)
-            self.processor.set_column_count(column_count)
-            self.processor.set_fill_blank_only(self.frame.fill_blank_var.get())
-            self.processor.set_post_process_enabled(self.frame.post_process_var.get())
-            
+            config = self._require_frame().get_config()
+            self.processor.set_target_key_column(config.target_key_col)
+            self.processor.set_match_column(config.target_match_col)
+            self.processor.set_update_start_column(config.target_update_start_col)
+            self.processor.set_master_key_column(config.master_key_col)
+            self.processor.set_master_match_column(config.master_match_col)
+            self.processor.set_start_column(config.master_start_col)
+            self.processor.set_column_count(config.column_count)
+            self.processor.set_fill_blank_only(config.fill_blank_only)
+            self.processor.set_post_process_enabled(config.post_process_enabled)
+        except ValidationError as exc:
+            self.dialogs.error(strings.ERROR_TITLE, f"{strings.VALIDATION_CONFIG_PREFIX}{exc}")
+            return
+        except Exception as exc:
+            self.dialogs.error(strings.ERROR_TITLE, str(exc))
+            return
+
+        try:
             updated_count = self.processor.process_files()
-            messagebox.showinfo("完成", f"共更新 {updated_count} 处数据。")
-        except Exception as e:
-            messagebox.showerror("错误", str(e))
+            self.dialogs.info(strings.SUCCESS_TITLE, f"共更新 {updated_count} 处数据。")
+        except Exception as exc:
+            self.dialogs.error(strings.ERROR_TITLE, str(exc))
+
 
 class ReverseUpdaterController(BaseController):
-    def __init__(self, frame, processor):
-        super().__init__(frame)
+    def __init__(self, frame, processor, dialog_service=None):
+        super().__init__(frame, dialog_service=dialog_service)
         self.processor = processor
         self.master_file_path = ""
         self.target_folder = ""
 
     def select_master_file(self):
-        file_path = filedialog.askopenfilename(
-            title="选择 Master 总表",
-            filetypes=[("Excel 文件", "*.xlsx *.xls")]
-        )
-        if file_path:
-            self.master_file_path = file_path
-            self.frame.master_label.config(text=f"已选择：{os.path.basename(file_path)}")
-            self.processor.set_master_file(file_path)
+        file_path = self._ask_excel_file("选择 Master 总表")
+        if not file_path:
+            return
+        self.master_file_path = file_path
+        self._require_frame().set_master_file_label(file_path)
+        self.processor.set_master_file(file_path)
 
     def select_target_folder(self):
-        folder_path = filedialog.askdirectory(title="选择目标文件夹")
-        if folder_path:
-            self.target_folder = folder_path
-            self.frame.folder_label.config(text=f"已选择：{os.path.basename(folder_path)}")
-            self.processor.set_target_folder(folder_path)
+        folder_path = self._ask_folder("选择目标文件夹")
+        if not folder_path:
+            return
+        self.target_folder = folder_path
+        self._require_frame().set_target_folder_label(folder_path)
+        self.processor.set_target_folder(folder_path)
 
     def process_files(self):
         if not self.master_file_path or not self.target_folder:
-            messagebox.showerror("错误", "请先选择 Master 文件和目标文件夹！")
+            self.dialogs.error(strings.ERROR_TITLE, strings.REQUIRE_MASTER_TARGET)
             return
 
         try:
-            # 获取小表列配置
-            target_key_col = int(self.frame.target_key_col_var.get()) - 1
-            target_match_col = int(self.frame.target_match_col_var.get()) - 1
-            target_content_col = int(self.frame.target_content_col_var.get()) - 1
-
-            # 获取 Master 表列配置
-            master_key_col = int(self.frame.master_key_col_var.get()) - 1
-            master_match_col = int(self.frame.master_match_col_var.get()) - 1
-            master_update_col = int(self.frame.master_update_col_var.get()) - 1
-
-            # 验证列索引
-            if any(c < 0 for c in [target_key_col, target_match_col, target_content_col, 
-                                     master_key_col, master_match_col, master_update_col]):
-                raise ValueError("列索引必须大于0")
-
-            # 配置处理器
-            self.processor.set_target_columns(target_key_col, target_match_col, target_content_col)
-            self.processor.set_master_columns(master_key_col, master_match_col, master_update_col)
-            self.processor.set_fill_blank_only(self.frame.fill_blank_var.get())
-
-        except ValueError as e:
-            messagebox.showerror("错误", f"列配置错误：{str(e)}")
+            config = self._require_frame().get_config()
+            self.processor.set_target_columns(config.target_key_col, config.target_match_col, config.target_content_col)
+            self.processor.set_master_columns(config.master_key_col, config.master_match_col, config.master_update_col)
+            self.processor.set_fill_blank_only(config.fill_blank_only)
+        except ValidationError as exc:
+            self.dialogs.error(strings.ERROR_TITLE, f"{strings.VALIDATION_CONFIG_PREFIX}{exc}")
+            return
+        except Exception as exc:
+            self.dialogs.error(strings.ERROR_TITLE, str(exc))
             return
 
         try:
             updated_count = self.processor.process_files()
-            messagebox.showinfo("完成", f"共更新 {updated_count} 行。")
-        except Exception as e:
-            messagebox.showerror("处理失败", str(e))
+            self.dialogs.info(strings.SUCCESS_TITLE, f"共更新 {updated_count} 行。")
+        except Exception as exc:
+            self.dialogs.error("处理失败", str(exc))
+
 
 class UntranslatedStatsController(BaseController):
-    def __init__(self, frame, processor):
-        super().__init__(frame)
+    def __init__(self, frame, processor, dialog_service=None):
+        super().__init__(frame, dialog_service=dialog_service)
         self.processor = processor
         self.target_folder = ""
         self.output_file = ""
 
     def select_target_folder(self):
-        folder_path = filedialog.askdirectory(title="选择小表文件夹")
-        if folder_path:
-            self.target_folder = folder_path
-            self.frame.update_folder_label(folder_path)
-            self.processor.set_target_folder(folder_path)
+        folder_path = self._ask_folder("选择小表文件夹")
+        if not folder_path:
+            return
+        self.target_folder = folder_path
+        self._require_frame().set_target_folder_label(folder_path)
+        self.processor.set_target_folder(folder_path)
 
     def select_output_file(self):
-        file_path = filedialog.asksaveasfilename(
-            title="选择输出文件",
-            defaultextension=".xlsx",
-            filetypes=[("Excel 文件", "*.xlsx")]
-        )
-        if file_path:
-            self.output_file = file_path
-            self.frame.update_output_label(file_path)
+        file_path = self._ask_output_excel_file("选择输出文件")
+        if not file_path:
+            return
+        self.output_file = file_path
+        self._require_frame().set_output_file_label(file_path)
 
     def process_stats(self):
         if not self.target_folder:
-            messagebox.showerror("错误", "请先选择小表文件夹！")
+            self.dialogs.error(strings.ERROR_TITLE, strings.REQUIRE_STATS_FOLDER)
             return
 
         if not self.output_file:
-            messagebox.showerror("错误", "请先选择输出文件！")
-            return
-
-        # 获取列配置和统计模式
-        source_col, translation_col, stats_mode = self.frame.get_column_config()
-        if source_col is None or translation_col is None:
+            self.dialogs.error(strings.ERROR_TITLE, strings.REQUIRE_OUTPUT_FILE)
             return
 
         try:
-            # 设置列配置和统计模式
-            self.processor.set_columns(source_col, translation_col)
-            self.processor.set_stats_mode(stats_mode)
-            
-            # 处理统计
+            config = self._require_frame().get_config()
+            self.processor.set_columns(config.source_col, config.translation_col)
+            self.processor.set_stats_mode(config.stats_mode)
+        except ValidationError as exc:
+            self.dialogs.error(strings.ERROR_TITLE, f"{strings.VALIDATION_CONFIG_PREFIX}{exc}")
+            return
+        except Exception as exc:
+            self.dialogs.error(strings.ERROR_TITLE, str(exc))
+            return
+
+        try:
             stats_results = self.processor.process_files()
-            
             if not stats_results:
-                messagebox.showwarning("警告", "未找到任何Excel文件或所有文件都没有未翻译内容")
+                self.dialogs.warning(strings.WARNING_TITLE, "未找到任何Excel文件或所有文件都没有未翻译内容")
                 return
-            
-            # 导出结果
+
             self.processor.export_to_excel(self.output_file)
-            
-            messagebox.showinfo("完成", f"统计完成！\n共处理 {len(stats_results)} 个文件\n结果已保存到: {self.output_file}")
-            
-        except Exception as e:
-            messagebox.showerror("错误", f"处理过程中发生错误：{str(e)}")
+            self.dialogs.info(
+                strings.SUCCESS_TITLE,
+                f"统计完成！\n共处理 {len(stats_results)} 个文件\n结果已保存到: {self.output_file}",
+            )
+        except Exception as exc:
+            self.dialogs.error(strings.ERROR_TITLE, f"处理过程中发生错误：{exc}")

@@ -1,7 +1,7 @@
 import tkinter as tk
 from tkinter import ttk
-from ui_components import UpdaterFrame, ClearerFrame, CompatibilityFrame, MultiColumnFrame, DeepReplaceFrame, ReverseUpdaterFrame, UntranslatedStatsFrame
-from controllers import UpdaterController, ClearerController, CompatibilityController, MultiColumnController, DeepReplaceController, ReverseUpdaterController, UntranslatedStatsController
+from ui.views import UpdaterFrame, ClearerFrame, CompatibilityFrame, DeepReplaceFrame, ReverseUpdaterFrame, UntranslatedStatsFrame
+from controllers import UpdaterController, ClearerController, CompatibilityController, DeepReplaceController, ReverseUpdaterController, UntranslatedStatsController
 from core.excel_processor import ExcelProcessor
 from core.excel_cleaner import ExcelColumnClearer
 from core.excel_compatibility_processor import ExcelCompatibilityProcessor
@@ -9,13 +9,14 @@ from core.multi_column_processor import MultiColumnExcelProcessor
 from core.deep_replace_processor import DeepReplaceProcessor
 from core.reverse_excel_processor import ReverseExcelProcessor
 from core.untranslated_stats_processor import UntranslatedStatsProcessor
+from ui.theme import APP_BG, configure_ttk_style
 
 class ExcelUpdaterApp:
     def __init__(self):
         self.root = tk.Tk()
         self.root.title("Momo——Build your mastersheet")
-        self.root.geometry("480x600")
-        self.root.configure(bg='#f0f0f0')
+        self.root.geometry("480x620")
+        self.root.configure(bg=APP_BG)
         
         # 设置主题和样式
         self.setup_style()
@@ -31,29 +32,7 @@ class ExcelUpdaterApp:
         self.init_components()
 
     def setup_style(self):
-        style = ttk.Style()
-        style.theme_use('clam')
-        style.configure('TNotebook', background='#f0f0f0', borderwidth=0)
-        style.configure('TNotebook.Tab', 
-            padding=[20, 8], 
-            background='#e0e0e0', 
-            foreground='#333333', 
-            borderwidth=1,
-            font=('Arial', 10)
-        )
-        style.map('TNotebook.Tab',
-            padding=[('selected', [20, 8])],
-            background=[('selected', '#4a90e2'), ('active', '#b8d6f5')],
-            foreground=[('selected', 'white'), ('active', '#333333')]
-        )
-        style.configure('TFrame', background='#f0f0f0')
-
-        # 移除选中 Tab 时的虚线框
-        style.layout('TNotebook.Tab', [('Notebook.tab', {'sticky': 'nswe', 'children': 
-            [('Notebook.padding', {'side': 'top', 'sticky': 'nswe', 'children': 
-                [('Notebook.label', {'side': 'top', 'sticky': ''})]
-            })]
-        })])
+        configure_ttk_style()
 
     def init_processors(self):
         self.excel_processor = ExcelProcessor(print)
@@ -82,7 +61,7 @@ class ExcelUpdaterApp:
 
         # --- 主要工具 ---
         # 批量更新工具
-        updater_controller = UpdaterController(None, self.excel_processor)
+        updater_controller = UpdaterController(None, self.excel_processor, self.multi_processor)
         updater_frame = UpdaterFrame(main_notebook, updater_controller)
         updater_controller.frame = updater_frame
         main_notebook.add(updater_frame, text='Master到小表')
@@ -92,12 +71,6 @@ class ExcelUpdaterApp:
         reverse_updater_frame = ReverseUpdaterFrame(main_notebook, reverse_updater_controller)
         reverse_updater_controller.frame = reverse_updater_frame
         main_notebook.add(reverse_updater_frame, text='小表到Master')
-
-        # 多列更新工具
-        multi_controller = MultiColumnController(None, self.multi_processor)
-        multi_frame = MultiColumnFrame(main_notebook, multi_controller)
-        multi_controller.frame = multi_frame
-        main_notebook.add(multi_frame, text='多列更新')
 
         # --- 辅助工具 ---
         # 列清空工具
