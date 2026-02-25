@@ -1,5 +1,7 @@
 import tkinter as tk
 
+from ui import theme
+
 
 class ToggleSwitch(tk.Frame):
     def __init__(
@@ -7,10 +9,11 @@ class ToggleSwitch(tk.Frame):
         parent,
         text,
         variable,
-        on_color="#0078D4",
-        off_color="#E5E5E5",
-        bg="#f0f0f0",
-        font=("Segoe UI", 9),
+        on_color=theme.ACCENT,
+        off_color=theme.BORDER,
+        bg=theme.SURFACE_BG,
+        font=theme.FONT_DEFAULT,
+        label_fg=theme.TEXT_PRIMARY,
         command=None,
     ):
         super().__init__(parent, bg=bg, highlightthickness=0, bd=0, takefocus=0)
@@ -18,8 +21,8 @@ class ToggleSwitch(tk.Frame):
         self.on_color = on_color
         self.off_color = off_color
         self.knob_fill = "#FFFFFF"
-        self.track_width = 40
-        self.track_height = 20
+        self.track_width = 34
+        self.track_height = 18
         self.knob_padding = 2
         self.command = command
 
@@ -38,13 +41,13 @@ class ToggleSwitch(tk.Frame):
             self,
             text=text,
             bg=bg,
-            fg="#333333",
+            fg=label_fg,
             font=font,
             highlightthickness=0,
             bd=0,
             takefocus=0,
         )
-        self.label.pack(side=tk.LEFT, padx=(8, 0))
+        self.label.pack(side=tk.LEFT, padx=(6, 0))
 
         self.canvas.bind("<Button-1>", self._toggle)
         self.label.bind("<Button-1>", self._toggle)
@@ -91,4 +94,3 @@ class ToggleSwitch(tk.Frame):
             except Exception:
                 pass
         super().destroy()
-

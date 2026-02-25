@@ -1,7 +1,7 @@
 import tkinter as tk
 from tkinter import ttk
 
-from ui import strings
+from ui import strings, theme
 from ui.validators import parse_column_1_based_to_0_based, parse_positive_int
 from ui.view_models import MultiColumnConfig
 from ui.views.base import BaseFrame
@@ -15,19 +15,23 @@ class MultiColumnFrame(BaseFrame):
         self.init_ui()
 
     def init_ui(self):
+        input_frame = self.create_section_card("输入文件")
         self.master_label = self.create_picker_with_status(
             button_text="选择 Master 总表",
             command=self.controller.select_multi_master_file,
             default_text=strings.DEFAULT_FILE_TEXT,
+            parent=input_frame,
+            button_pady=(0, theme.SPACING_XXS),
         )
         self.folder_label = self.create_picker_with_status(
             button_text="选择目标文件夹",
             command=self.controller.select_multi_target_folder,
             default_text=strings.DEFAULT_FOLDER_TEXT,
+            parent=input_frame,
+            button_pady=theme.SPACING_SM,
         )
 
-        target_frame = ttk.LabelFrame(self, text="目标文件列配置", padding=(10, 5))
-        target_frame.pack(pady=10, padx=10, fill="x")
+        target_frame = self.create_section_card("目标文件列配置")
         self.target_key_col_var = tk.StringVar(value="2")
         self.match_column_var = tk.StringVar(value="3")
         self.update_start_column_var = tk.StringVar(value="5")
@@ -35,8 +39,7 @@ class MultiColumnFrame(BaseFrame):
         create_labeled_entry(target_frame, row=0, column=2, label_text="原文列:", variable=self.match_column_var)
         create_labeled_entry(target_frame, row=0, column=4, label_text="更新开始列:", variable=self.update_start_column_var)
 
-        master_frame = ttk.LabelFrame(self, text="Master表列配置", padding=(10, 5))
-        master_frame.pack(pady=10, padx=10, fill="x")
+        master_frame = self.create_section_card("Master表列配置")
         self.master_key_col_var = tk.StringVar(value="2")
         self.master_match_col_var = tk.StringVar(value="3")
         self.start_column_var = tk.StringVar(value="5")
@@ -44,31 +47,39 @@ class MultiColumnFrame(BaseFrame):
         create_labeled_entry(master_frame, row=0, column=2, label_text="原文列:", variable=self.master_match_col_var)
         create_labeled_entry(master_frame, row=0, column=4, label_text="内容开始列:", variable=self.start_column_var)
 
-        params_frame = ttk.LabelFrame(self, text="处理参数", padding=(10, 5))
-        params_frame.pack(pady=10, padx=10, fill="x")
+        params_frame = self.create_section_card("处理参数")
         self.column_count_var = tk.StringVar(value="7")
         create_labeled_entry(params_frame, row=0, column=0, label_text="更新列数:", variable=self.column_count_var, label_padx=(0, 0))
+
+        toggle_frame = ttk.Frame(params_frame, style="Surface.TFrame")
+        toggle_frame.grid(
+            row=1,
+            column=0,
+            columnspan=6,
+            sticky="w",
+            pady=(theme.SPACING_XS, 0),
+        )
 
         self.post_process_var = tk.BooleanVar(value=True)
         self.create_toggle(
             text="启用后处理（兼容性保存）",
             variable=self.post_process_var,
-            pady=(5, 5),
+            parent=toggle_frame,
+            pady=(0, theme.SPACING_XXS),
         )
 
         self.fill_blank_var = tk.BooleanVar(value=False)
         self.create_toggle(
             text="仅填空（关闭=覆盖）",
             variable=self.fill_blank_var,
-            pady=(0, 5),
+            parent=toggle_frame,
+            pady=(0, theme.SPACING_XS),
         )
 
-        tk.Button(
-            self,
+        self.create_primary_button(
             text="开始处理",
             command=self.controller.process_multi_column,
-            **self.button_style,
-        ).pack(pady=20)
+        )
 
     def set_master_file_label(self, file_path):
         self.set_selected_file_label(self.master_label, file_path)
@@ -88,4 +99,3 @@ class MultiColumnFrame(BaseFrame):
             fill_blank_only=bool(self.fill_blank_var.get()),
             post_process_enabled=bool(self.post_process_var.get()),
         )
-

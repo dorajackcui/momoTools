@@ -28,7 +28,9 @@ class AppSmokeTestCase(unittest.TestCase):
 
         self.assertIsNotNone(instance)
         root.title.assert_called_once_with("Momo——Build your mastersheet")
-        root.geometry.assert_called_once_with("480x600")
+        root.geometry.assert_called_once_with("540x680")
+        root.minsize.assert_called_once_with(520, 640)
+        root.resizable.assert_called_once_with(True, True)
         notebook.pack.assert_called_once()
         mock_setup_style.assert_called_once()
         mock_init_processors.assert_called_once()
@@ -38,6 +40,8 @@ class AppSmokeTestCase(unittest.TestCase):
         source = Path("app.py").read_text(encoding="utf-8")
         self.assertNotIn("main_notebook.add(multi_frame, text='多列更新')", source)
         self.assertIn("UpdaterController(None, self.excel_processor, self.multi_processor)", source)
+        self.assertNotIn("_build_outer_tab_icons", source)
+        self.assertNotIn("PhotoImage", source)
 
 
 if __name__ == "__main__":

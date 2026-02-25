@@ -15,15 +15,17 @@ class ExcelUpdaterApp:
     def __init__(self):
         self.root = tk.Tk()
         self.root.title("Momo——Build your mastersheet")
-        self.root.geometry("480x620")
+        self.root.geometry("540x640")
+        self.root.minsize(520, 620)
+        self.root.resizable(True, True)
         self.root.configure(bg=APP_BG)
         
         # 设置主题和样式
         self.setup_style()
         
         # 创建选项卡控件
-        self.notebook = ttk.Notebook(self.root)
-        self.notebook.pack(expand=True, fill='both', padx=1, pady=5)
+        self.notebook = ttk.Notebook(self.root, takefocus=False)
+        self.notebook.pack(expand=True, fill='both', padx=6, pady=6)
         
         # 初始化处理器
         self.init_processors()
@@ -53,11 +55,11 @@ class ExcelUpdaterApp:
         self.notebook.add(utilities_frame, text='辅助工具')
 
         # --- 创建嵌套的 Notebook ---
-        main_notebook = ttk.Notebook(main_tools_frame)
-        main_notebook.pack(expand=True, fill='both', padx=5, pady=5)
+        main_notebook = ttk.Notebook(main_tools_frame, takefocus=False)
+        main_notebook.pack(expand=True, fill='both', padx=6, pady=6)
 
-        utilities_notebook = ttk.Notebook(utilities_frame)
-        utilities_notebook.pack(expand=True, fill='both', padx=5, pady=5)
+        utilities_notebook = ttk.Notebook(utilities_frame, takefocus=False)
+        utilities_notebook.pack(expand=True, fill='both', padx=6, pady=6)
 
         # --- 主要工具 ---
         # 批量更新工具

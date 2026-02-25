@@ -1,7 +1,6 @@
 import tkinter as tk
-from tkinter import ttk
+from ui import strings, theme
 
-from ui import strings
 from ui.validators import parse_column_1_based_to_0_based
 from ui.view_models import ReverseConfig
 from ui.views.base import BaseFrame
@@ -15,19 +14,23 @@ class ReverseUpdaterFrame(BaseFrame):
         self.init_ui()
 
     def init_ui(self):
+        input_frame = self.create_section_card("输入文件")
         self.master_label = self.create_picker_with_status(
             button_text="选择 Master 总表",
             command=self.controller.select_master_file,
             default_text=strings.DEFAULT_FILE_TEXT,
+            parent=input_frame,
+            button_pady=(0, theme.SPACING_XXS),
         )
         self.folder_label = self.create_picker_with_status(
             button_text="选择小表文件夹",
             command=self.controller.select_target_folder,
             default_text=strings.DEFAULT_FOLDER_TEXT,
+            parent=input_frame,
+            button_pady=theme.SPACING_SM,
         )
 
-        target_frame = ttk.LabelFrame(self, text="小表列配置", padding=(10, 5))
-        target_frame.pack(pady=10, padx=10, fill="x")
+        target_frame = self.create_section_card("小表列配置")
         self.target_key_col_var = tk.StringVar(value="1")
         self.target_match_col_var = tk.StringVar(value="2")
         self.target_content_col_var = tk.StringVar(value="3")
@@ -35,8 +38,7 @@ class ReverseUpdaterFrame(BaseFrame):
         create_labeled_entry(target_frame, row=0, column=2, label_text="原文列:", variable=self.target_match_col_var)
         create_labeled_entry(target_frame, row=0, column=4, label_text="译文列:", variable=self.target_content_col_var)
 
-        master_frame = ttk.LabelFrame(self, text="Master表列配置", padding=(10, 5))
-        master_frame.pack(pady=10, padx=10, fill="x")
+        master_frame = self.create_section_card("Master表列配置")
         self.master_key_col_var = tk.StringVar(value="2")
         self.master_match_col_var = tk.StringVar(value="3")
         self.master_update_col_var = tk.StringVar(value="4")
@@ -44,19 +46,19 @@ class ReverseUpdaterFrame(BaseFrame):
         create_labeled_entry(master_frame, row=0, column=2, label_text="原文列:", variable=self.master_match_col_var)
         create_labeled_entry(master_frame, row=0, column=4, label_text="译文列:", variable=self.master_update_col_var)
 
+        option_frame = self.create_section_card("更新选项")
         self.fill_blank_var = tk.BooleanVar(value=False)
         self.create_toggle(
             text="仅填空（关闭=覆盖）",
             variable=self.fill_blank_var,
-            pady=(5, 5),
+            parent=option_frame,
+            pady=(0, theme.SPACING_XS),
         )
 
-        tk.Button(
-            self,
+        self.create_primary_button(
             text="填充master表",
             command=self.controller.process_files,
-            **self.button_style,
-        ).pack(pady=20)
+        )
 
     def set_master_file_label(self, file_path):
         self.set_selected_file_label(self.master_label, file_path)
@@ -74,4 +76,3 @@ class ReverseUpdaterFrame(BaseFrame):
             master_update_col=parse_column_1_based_to_0_based(self.master_update_col_var.get(), "Master 译文列"),
             fill_blank_only=bool(self.fill_blank_var.get()),
         )
-
