@@ -405,3 +405,59 @@ class UntranslatedStatsController(BaseController):
             )
         except Exception as exc:
             self.dialogs.error(strings.ERROR_TITLE, f"处理过程中发生错误：{exc}")
+
+class TerminologyExtractorController(BaseController):
+    def __init__(self, frame, processor, dialog_service=None):
+        super().__init__(frame, dialog_service=dialog_service)
+        self.processor = processor
+        self.input_folder = ""
+        self.rule_config_path = ""
+        self.output_file = ""
+
+    def select_input_folder(self):
+        folder_path = self._ask_folder("Select input folder")
+        if not folder_path:
+            return
+        self.input_folder = folder_path
+        self._require_frame().set_input_folder_label(folder_path)
+        self.processor.set_input_folder(folder_path)
+
+    def select_rule_config(self):
+        file_path = filedialog.askopenfilename(
+            title="Select rule config",
+            filetypes=[("JSON", "*.json"), ("All files", "*.*")],
+        )
+        if not file_path:
+            return
+        self.rule_config_path = file_path
+        self._require_frame().set_rule_config_label(file_path)
+        self.processor.set_rule_config(file_path)
+
+    def select_output_file(self):
+        file_path = self._ask_output_excel_file("Select output file")
+        if not file_path:
+            return
+        self.output_file = file_path
+        self._require_frame().set_output_file_label(file_path)
+        self.processor.set_output_file(file_path)
+
+    def process_files(self):
+        if not self.input_folder or not self.rule_config_path or not self.output_file:
+            self.dialogs.error(strings.ERROR_TITLE, strings.REQUIRE_TERMINOLOGY_INPUT)
+            return
+
+        try:
+            result = self.processor.process_files()
+            self.dialogs.info(
+                strings.SUCCESS_TITLE,
+                (
+                    "Terminology extraction completed.\n"
+                    f"Files: {result['files_succeeded']}/{result['files_total']}\n"
+                    f"Candidates: {result['candidates_count']}\n"
+                    f"Terms: {result['terms_count']}\n"
+                    f"Relations: {result['relations_count']}\n"
+                    f"Review: {result['review_count']}"
+                ),
+            )
+        except Exception as exc:
+            self.dialogs.error(strings.ERROR_TITLE, str(exc))

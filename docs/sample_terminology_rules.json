@@ -1,0 +1,53 @@
+{
+  "version": 1,
+  "files": "*",
+  "compound_delimiters": [
+    "·"
+  ],
+  "normalization": {
+    "trim": true,
+    "collapse_whitespace": true,
+    "punctuation_normalization": {
+      "enabled": false,
+      "map": {
+        "，": ",",
+        "。": "."
+      }
+    },
+    "min_term_length": 1,
+    "case_insensitive_dedup": true
+  },
+  "thresholds": {
+    "containment_min_len": 2,
+    "review_short_len_le": 1,
+    "review_noise_ratio_ge": 0.6
+  },
+  "extractors": [
+    {
+      "id": "record_source_v1",
+      "type": "record_rule",
+      "enabled": true,
+      "skip_header": true,
+      "term_column": "MsgStr",
+      "version": "2.3.2",
+      "key": "^(?=.*name)(?!.*LDLG_Text).*",
+      "key_regex": true
+    },
+    {
+      "id": "tag_span_v1",
+      "type": "tag_span",
+      "enabled": true,
+      "source_columns": [
+        "MsgStr"
+      ],
+      "open_tag": [
+        "<RedBold>",
+        "<BlueBold>"
+      ],
+      "close_tags": [
+        "</tag>",
+        "</>"
+      ]
+    }
+  ]
+}

@@ -1,22 +1,23 @@
-import os
+﻿import os
 
-ERROR_TITLE = "错误"
-WARNING_TITLE = "警告"
-SUCCESS_TITLE = "完成"
-CONFIRM_TITLE = "确认操作"
+ERROR_TITLE = "Error"
+WARNING_TITLE = "Warning"
+SUCCESS_TITLE = "Done"
+CONFIRM_TITLE = "Confirm"
 
-DEFAULT_FILE_TEXT = "未选择文件"
-DEFAULT_FOLDER_TEXT = "未选择文件夹"
-DEFAULT_OUTPUT_TEXT = "未选择输出文件"
+DEFAULT_FILE_TEXT = "No file selected"
+DEFAULT_FOLDER_TEXT = "No folder selected"
+DEFAULT_OUTPUT_TEXT = "No output selected"
 
-SELECTED_PREFIX = "已选择："
-OUTPUT_PREFIX = "输出: "
+SELECTED_PREFIX = "Selected: "
+OUTPUT_PREFIX = "Output: "
 
-REQUIRE_MASTER_TARGET = "请先选择 Master 文件和目标文件夹！"
-REQUIRE_TARGET_FOLDER = "请先选择目标文件夹！"
-REQUIRE_SOURCE_TARGET = "请先选择源文件夹和目标文件夹！"
-REQUIRE_STATS_FOLDER = "请先选择小表文件夹！"
-REQUIRE_OUTPUT_FILE = "请先选择输出文件！"
+REQUIRE_MASTER_TARGET = "Please select master file and target folder first."
+REQUIRE_TARGET_FOLDER = "Please select target folder first."
+REQUIRE_SOURCE_TARGET = "Please select source and target folders first."
+REQUIRE_STATS_FOLDER = "Please select stats source folder first."
+REQUIRE_OUTPUT_FILE = "Please select output file first."
+REQUIRE_TERMINOLOGY_INPUT = "Please select input folder, rule config, and output file."
 
 VALIDATION_CONFIG_PREFIX = "列配置错误："
 VALIDATION_MATCH_PREFIX = "匹配列设置错误："
@@ -29,4 +30,3 @@ def selected_path_text(path):
 
 def output_path_text(path):
     return f"{OUTPUT_PREFIX}{os.path.basename(path)}"
-

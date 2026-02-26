@@ -1,6 +1,6 @@
 # Docs Index (Current)
 
-Last updated: 2026-02-26
+Last updated: 2026-02-26 (Terminology Extractor MVP added)
 
 ## Recommended reading order for a new AI session
 
@@ -17,6 +17,18 @@ Last updated: 2026-02-26
   - Pending policy decisions for translation/data handling.
 - `docs/troubleshooting.md`
   - Practical diagnosis steps and command checklist.
+- `docs/sample_terminology_rules.json`
+  - Sample Terminology Extractor rule config for local testing.
+- `docs/terminology_rule_config_notes.md`
+  - Field-by-field explanation for terminology rule config.
+
+## New feature docs touchpoints
+
+- Terminology extractor implementation lives in:
+  - `core/terminology/*`
+  - `ui/views/terminology_extractor.py`
+  - `controllers.py` (`TerminologyExtractorController`)
+  - `app.py` (new `Utilities` tab entry)
 
 ## Archived docs
 
