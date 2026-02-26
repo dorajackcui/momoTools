@@ -1,72 +1,55 @@
 # Memo: Pending Translation/Data Handling Decisions
 
-Date: 2026-02-25
+Last updated: 2026-02-26
 Owner: TBD
-Status: Pending
+Status: Open
 
-## 1) Empty translation overwrite policy
+This file keeps only unresolved policy questions and currently locked baselines.
 
-### Current behavior
-- Three fill workflows now support mode toggle:
-  - `覆盖` (default): keep current overwrite behavior.
-  - `填空`: only write when target translation cell is blank.
-- Blank definition is fixed: `None`, `""`, and whitespace-only strings.
+## Locked baseline (already implemented)
 
-### Why this is pending
-- No longer pending for overwrite strategy toggle.
-- Still pending only for business policy nuances around empty source value (`""`) under each mode.
+1. Fill mode toggle exists in:
+   - `master_to_target_single`
+   - `master_to_target_multi`
+   - `target_to_master_reverse`
+2. Fill-blank rule is fixed:
+   - blank = `None`, empty string, whitespace-only string
+   - source of truth = `core/kernel/excel_io.py:is_blank_value`
+3. Post-process toggle (COM save) exists for Master -> small(single/multi), default enabled, not persisted.
 
-### Suggested acceptance check
-- Matched row with empty translation:
-  - Option A: clear output cell
-  - Option B: keep original output cell unchanged
+## Pending 1: empty source/translation content behavior
 
-## 2) Number-to-string fidelity policy
+Question:
+- For matched rows where incoming content is empty-string (`""`), should update behavior clear existing target cell or keep existing value?
 
-### Current behavior
-- Values are generally passed using Python `str(value)` semantics, not Excel display-format semantics.
-- This can change representation details (example: formatted numeric cells may not preserve display format).
-- Risk point: falsy checks can treat `0` as empty in some paths if logic uses `if value else ""`.
+Current implementation tendency:
+- values are passed through logical string flow; business intent for empty-string is not formally locked.
 
-### Why this is pending
-- Need strict rule: preserve logical value as string (`str(value)`), or preserve exact displayed text/format from Excel.
-- Need explicit handling for numeric `0` so it is not converted to empty.
+Decision needed:
+- Option A: allow clearing target cell with empty-string input
+- Option B: keep original target cell when incoming is empty-string
 
-### Suggested acceptance check
-- Input values: `0`, `1`, `1.0`, `00123`, percentage/date-formatted cells.
-- Verify output matches agreed policy (logical string vs display string).
+Suggested acceptance cases:
+- matched row + target cell already has text + incoming empty-string
+- verify behavior under both `覆盖` and `填空` modes
 
-## 3) Post-process toggle defaults (implemented)
+## Pending 2: number/string display fidelity
 
-### Current behavior
-- `Master -> 小表` 和 `多列更新` 均支持“后处理（Excel COM 兼容性保存）”开关。
-- 两个工具页开关独立，默认值均为开启。
-- 开关状态不持久化；应用重启后恢复默认开启。
+Question:
+- Should output preserve logical value (`str(value)`), or preserve exact Excel displayed text/format?
 
-### Expected effect
-- 关闭时仅跳过后处理步骤，不影响前置填表写入逻辑与列更新范围。
+Current implementation tendency:
+- mostly logical value path; may differ from display formatting (e.g., `1`, `1.0`, formatted date/percentage).
 
-## 4) Fill mode toggle defaults (implemented)
+Decision needed:
+- Option A: keep logical value standardization
+- Option B: preserve display-format text
 
-### Current behavior
-- `Master -> 小表`、`多列更新`、`小表 -> Master` 三个填表功能都支持“仅填空（关闭=覆盖）”toggle。
-- 默认关闭（即覆盖模式），不持久化。
+Suggested acceptance cases:
+- `0`, `1`, `1.0`, `00123`, date-formatted cell, percentage-formatted cell
 
-### Expected effect
-- 覆盖模式：命中后直接写入（历史行为）。
-- 填空模式：仅在目标译文单元格为空时写入。
+## Related references
 
-## 5) Fill-blank target-cell non-empty rule (locked)
-
-Date locked: 2026-02-25
-Scope: `master_to_target_single`, `master_to_target_multi`, `target_to_master_reverse`
-
-### Rule
-- In fill-blank mode, write only when target cell is truly blank.
-- Blank means: Python `None`, `""`, or whitespace-only string (after `strip()`).
-- Non-blank means: any visible string (including `"None"`, `"0"`, formula text), numbers (including `0`), booleans (including `False`), dates, and other objects.
-- Formula cells are treated as non-blank to avoid formula loss.
-
-### Single source of truth
-- Use `core/kernel/excel_io.py:is_blank_value` as the only blank check.
-- Do not add per-processor custom blank logic.
+- Detailed IO behavior: `IO_FORMAT_REQUIREMENTS.md`
+- Session snapshot: `docs/SESSION_DUMP.md`
+- Historical notes archived under: `docs/archive/2026-02-26/`

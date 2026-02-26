@@ -1,34 +1,73 @@
-# Troubleshooting Guide
+# Troubleshooting Guide (Current)
 
-## 1. `ThreadPoolExecutor(max_workers=0)` style failures
+Last updated: 2026-02-26
 
-- Symptom: process crashes when folder is empty.
-- Check: target folder contains zero matching Excel files.
-- Status: fixed by guarded parallel helpers in `core/kernel/excel_io.py`.
+## 1) Empty folder or no Excel files
 
-## 2. File lock / cannot open workbook
+Symptom:
+- task finishes with 0 updates, or shows no files found.
 
-- Symptom: write-back fails or files remain locked.
-- Check:
-  - Excel process still holding file.
-  - Input file opened by another user.
-- Action:
-  - Close related Excel windows.
-  - Re-run and inspect `[E_*]` event logs for file path.
+Check:
+- selected folder actually contains `.xlsx`/`.xls`.
+- temporary files (`~$`) are ignored in some flows.
 
-## 3. COM-based processor failures
+Note:
+- thread-pool crash on empty list was fixed in kernel helpers.
 
-- Affected: `ExcelColumnClearer`, `ExcelCompatibilityProcessor`.
-- Requirement: Microsoft Excel installed on Windows host.
-- If failures persist:
-  - validate Office COM registration.
-  - run with minimal sample file to isolate environment issue.
+## 2) File lock or save failure
 
-## 4. Regression mismatch in golden checks
+Symptom:
+- write-back fails, workbook cannot be opened, or output not saved.
 
-- Use `scripts/run_golden_regression.py`.
-- Inspect report under `tests/golden/reports/`.
-- Confirm:
-  - same sheet (`active` vs named sheet)
-  - same source fixture version
-  - same processor mode and column configuration
+Check:
+- file is open in Excel or locked by another process/user.
+- file permissions are read-only.
+
+Action:
+- close all related Excel windows/processes.
+- rerun and inspect log lines with `[E_*]` codes and `file=...`.
+
+## 3) COM-related failures (Windows + Office dependency)
+
+Affected functions:
+- `ExcelColumnClearer`
+- `ExcelCompatibilityProcessor`
+- post-process steps in Master->small single/multi processors
+
+Check:
+- Microsoft Excel installed locally.
+- Office COM registration available.
+
+Action:
+- run with a minimal sample workbook first.
+- if COM path is not required, disable post-process toggle where available.
+
+## 4) Wrong columns / no matched updates
+
+Symptom:
+- process runs but updates are unexpectedly low or zero.
+
+Check:
+- key/match/update column indices are configured correctly (UI is 1-based input, processor uses 0-based internally after conversion).
+- selected sheet assumptions (`active` sheet only).
+- key/match values contain empty cells or unexpected whitespace.
+
+Reference:
+- `IO_FORMAT_REQUIREMENTS.md` for detailed per-mode column defaults.
+
+## 5) Untranslated stats output path confusion
+
+Current behavior:
+- selecting stats target folder auto-generates output file in the parent folder.
+- default name is `未翻译统计.xlsx`; conflicts auto-increment to `未翻译统计 (n).xlsx`.
+- manual output path remains optional override.
+- changing target folder resets output path to new auto path.
+
+If user cannot find output:
+- check the parent directory of the selected small-sheet folder first.
+
+## 6) Regression check quick commands
+
+- `python -m py_compile app.py controllers.py ui_components.py`
+- `python -m unittest discover -s tests -p "test_ui_*.py"`
+- optional: `python scripts/run_golden_regression.py`
