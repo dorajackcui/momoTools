@@ -55,3 +55,18 @@ Status: Pending
 ### Expected effect
 - 覆盖模式：命中后直接写入（历史行为）。
 - 填空模式：仅在目标译文单元格为空时写入。
+
+## 5) Fill-blank target-cell non-empty rule (locked)
+
+Date locked: 2026-02-25
+Scope: `master_to_target_single`, `master_to_target_multi`, `target_to_master_reverse`
+
+### Rule
+- In fill-blank mode, write only when target cell is truly blank.
+- Blank means: Python `None`, `""`, or whitespace-only string (after `strip()`).
+- Non-blank means: any visible string (including `"None"`, `"0"`, formula text), numbers (including `0`), booleans (including `False`), dates, and other objects.
+- Formula cells are treated as non-blank to avoid formula loss.
+
+### Single source of truth
+- Use `core/kernel/excel_io.py:is_blank_value` as the only blank check.
+- Do not add per-processor custom blank logic.

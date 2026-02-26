@@ -50,7 +50,7 @@ class UntranslatedStatsFrame(BaseFrame):
         output_frame.pack(fill="x", pady=(0, theme.SPACING_XXS))
         create_action_button(
             output_frame,
-            text="选择输出文件",
+            text="选择输出文件（可选）",
             command=self.controller.select_output_file,
             button_style="Picker.TButton",
             side=tk.LEFT,

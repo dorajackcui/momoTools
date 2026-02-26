@@ -120,7 +120,7 @@ class ExcelProcessor:
             combined_key = build_combined_key(key_text, row[1], separator=self.io_contract.key_separator)
             if not combined_key:
                 continue
-            master_dict[combined_key] = row[2] if row[2] else ""
+            master_dict[combined_key] = safe_to_str(row[2], strip=False)
 
         self.log(f"Master文件读取耗时: {time.time() - master_start_time:.2f}秒")
         self.log(f"Master 中共找到 {len(master_dict)} 个有效Key")
