@@ -71,3 +71,25 @@ If user cannot find output:
 - `python -m py_compile app.py controllers.py ui_components.py`
 - `python -m unittest discover -s tests -p "test_ui_*.py"`
 - optional: `python scripts/run_golden_regression.py`
+
+## 7) Encoding / mojibake guardrails
+
+Symptoms:
+- Chinese text looks garbled in terminal output (for example `涓枃`).
+- JSON parse fails with BOM-related errors.
+
+Checks:
+- run repository encoding check: `python scripts/check_text_encoding.py`
+- on Windows PowerShell 5.1, prefer `Get-Content -Encoding UTF8 <file>`
+
+Notes:
+- project text files are expected to be UTF-8 without BOM.
+- terminal display issues can be separate from file-content corruption.
+
+## 8) Terminology rule path auto-restore
+
+Current behavior:
+- Terminology tab remembers last selected rule JSON path and restores it on next launch.
+
+If the restored path is outdated:
+- reselect a valid rule JSON once; the new path will overwrite persisted state.

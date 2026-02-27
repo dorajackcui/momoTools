@@ -1,3 +1,4 @@
+import json
 import os
 from tkinter import filedialog
 
@@ -34,6 +35,42 @@ class BaseController:
             defaultextension=".xlsx",
             filetypes=[("Excel 文件", "*.xlsx")],
         )
+
+
+class TerminologyPathStateStore:
+    """Persist terminology UI paths under user profile."""
+
+    STATE_KEY_RULE_CONFIG_PATH = "terminology_rule_config_path"
+
+    def __init__(self, state_path=None):
+        self.state_path = state_path or self._default_state_path()
+
+    @staticmethod
+    def _default_state_path():
+        base_dir = os.environ.get("APPDATA") or os.path.expanduser("~")
+        return os.path.join(base_dir, "TM_builder", "ui_state.json")
+
+    def load(self):
+        if not os.path.exists(self.state_path):
+            return {}
+        try:
+            with open(self.state_path, "r", encoding="utf-8-sig") as handle:
+                data = json.load(handle)
+            return data if isinstance(data, dict) else {}
+        except Exception:
+            return {}
+
+    def save(self, state):
+        if not isinstance(state, dict):
+            return
+        try:
+            folder = os.path.dirname(self.state_path)
+            if folder:
+                os.makedirs(folder, exist_ok=True)
+            with open(self.state_path, "w", encoding="utf-8") as handle:
+                json.dump(state, handle, ensure_ascii=False, indent=2)
+        except Exception:
+            return
 
 
 class UpdaterController(BaseController):
@@ -407,12 +444,29 @@ class UntranslatedStatsController(BaseController):
             self.dialogs.error(strings.ERROR_TITLE, f"处理过程中发生错误：{exc}")
 
 class TerminologyExtractorController(BaseController):
-    def __init__(self, frame, processor, dialog_service=None):
+    def __init__(self, frame, processor, dialog_service=None, state_store=None):
         super().__init__(frame, dialog_service=dialog_service)
         self.processor = processor
+        self.state_store = state_store or TerminologyPathStateStore()
         self.input_folder = ""
         self.rule_config_path = ""
         self.output_file = ""
+        self.restore_persisted_paths()
+
+    def restore_persisted_paths(self):
+        state = self.state_store.load()
+        persisted_path = str(state.get(TerminologyPathStateStore.STATE_KEY_RULE_CONFIG_PATH, "")).strip()
+        if not persisted_path or not os.path.isfile(persisted_path):
+            return
+        self.rule_config_path = persisted_path
+        if self.frame is not None:
+            self._require_frame().set_rule_config_label(persisted_path)
+        self.processor.set_rule_config(persisted_path)
+
+    def _persist_rule_config_path(self):
+        state = self.state_store.load()
+        state[TerminologyPathStateStore.STATE_KEY_RULE_CONFIG_PATH] = self.rule_config_path
+        self.state_store.save(state)
 
     def select_input_folder(self):
         folder_path = self._ask_folder("Select input folder")
@@ -423,15 +477,20 @@ class TerminologyExtractorController(BaseController):
         self.processor.set_input_folder(folder_path)
 
     def select_rule_config(self):
+        initial_dir = ""
+        if self.rule_config_path:
+            initial_dir = os.path.dirname(self.rule_config_path)
         file_path = filedialog.askopenfilename(
             title="Select rule config",
             filetypes=[("JSON", "*.json"), ("All files", "*.*")],
+            initialdir=initial_dir or None,
         )
         if not file_path:
             return
         self.rule_config_path = file_path
         self._require_frame().set_rule_config_label(file_path)
         self.processor.set_rule_config(file_path)
+        self._persist_rule_config_path()
 
     def select_output_file(self):
         file_path = self._ask_output_excel_file("Select output file")

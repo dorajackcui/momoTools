@@ -9,7 +9,6 @@ class RecordRule:
     enabled: bool
     skip_header: bool
     term_column: str
-    versions: tuple[str, ...]
     key_terms: tuple[str, ...]
     key_regex: bool = False
 
@@ -65,6 +64,7 @@ class ThresholdSettings:
 class TerminologyConfig:
     version: int
     files: tuple[str, ...]
+    versions: tuple[str, ...]
     compound_delimiters: tuple[str, ...]
     normalization: NormalizationSettings
     thresholds: ThresholdSettings

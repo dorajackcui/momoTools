@@ -1,4 +1,4 @@
-﻿import json
+import json
 import os
 import tempfile
 import unittest
@@ -24,6 +24,7 @@ class TerminologyProcessorTestCase(unittest.TestCase):
         return {
             "version": 1,
             "files": ["abc", "cde.xlsx"],
+            "versions": ["2.1.3", "2.2.3"],
             "compound_delimiters": ["·"],
             "normalization": {
                 "trim": True,
@@ -47,7 +48,6 @@ class TerminologyProcessorTestCase(unittest.TestCase):
                     "enabled": True,
                     "skip_header": True,
                     "term_column": "source",
-                    "version": "2.1.3, 2.2.3",
                     "key": "name",
                 },
                 {
@@ -198,13 +198,13 @@ class TerminologyProcessorTestCase(unittest.TestCase):
             self.assertEqual(str(detail_item["key_value"]), "player_name")
             self.assertEqual(str(detail_item["version_value"]), "2.1.3")
 
-    def test_loader_supports_files_version_key_and_delimiters_string_or_array(self):
+    def test_loader_supports_files_versions_key_and_delimiters_string_or_array(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             config_path = os.path.join(temp_dir, "rules.json")
             config = self._base_config()
             config["files"] = "abc, cde.xlsx"
+            config["versions"] = "2.1.3, 2.2.3"
             config["compound_delimiters"] = "·, /"
-            config["extractors"][0]["version"] = ["2.1.3", "2.2.3"]
             config["extractors"][0]["key"] = ["name", "title"]
             config["extractors"][0]["key_regex"] = True
             config["extractors"][1]["open_tag"] = "<tag>, <color>"
@@ -212,31 +212,40 @@ class TerminologyProcessorTestCase(unittest.TestCase):
 
             loaded = ExtractorConfigLoader().load(config_path)
             self.assertEqual(loaded.files, ("abc", "cde.xlsx"))
+            self.assertEqual(loaded.versions, ("2.1.3", "2.2.3"))
             self.assertEqual(loaded.compound_delimiters, ("·", "/"))
             record_rule = loaded.extractors[0]
             tag_rule = loaded.extractors[1]
-            self.assertEqual(record_rule.versions, ("2.1.3", "2.2.3"))
             self.assertEqual(record_rule.key_terms, ("name", "title"))
             self.assertTrue(record_rule.key_regex)
             self.assertEqual(tag_rule.open_tags, ("<tag>", "<color>"))
 
-    def test_loader_defaults_to_all_versions_when_version_missing_or_wildcard(self):
+    def test_loader_defaults_to_all_versions_when_versions_missing_or_wildcard(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             config_path_missing = os.path.join(temp_dir, "rules_missing.json")
             config_missing = self._base_config()
-            config_missing["extractors"][0].pop("version")
+            config_missing.pop("versions")
             self._write_config(config_path_missing, config_missing)
             loaded_missing = ExtractorConfigLoader().load(config_path_missing)
-            record_rule_missing = loaded_missing.extractors[0]
-            self.assertEqual(record_rule_missing.versions, tuple())
+            self.assertEqual(loaded_missing.versions, tuple())
 
             config_path_wildcard = os.path.join(temp_dir, "rules_wildcard.json")
             config_wildcard = self._base_config()
-            config_wildcard["extractors"][0]["version"] = "*"
+            config_wildcard["versions"] = "*"
             self._write_config(config_path_wildcard, config_wildcard)
             loaded_wildcard = ExtractorConfigLoader().load(config_path_wildcard)
-            record_rule_wildcard = loaded_wildcard.extractors[0]
-            self.assertEqual(record_rule_wildcard.versions, tuple())
+            self.assertEqual(loaded_wildcard.versions, tuple())
+
+    def test_loader_rejects_legacy_record_rule_version_field(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            config_path = os.path.join(temp_dir, "rules.json")
+            config = self._base_config()
+            config["extractors"][0]["version"] = "2.1.3"
+            self._write_config(config_path, config)
+
+            with self.assertRaises(ValueError) as ctx:
+                ExtractorConfigLoader().load(config_path)
+            self.assertIn("record_rule.version is no longer supported", str(ctx.exception))
 
     def test_loader_supports_tag_span_open_tags_alias(self):
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -310,11 +319,73 @@ class TerminologyProcessorTestCase(unittest.TestCase):
             self.assertEqual(result["files_succeeded"], 2)
             self.assertTrue(os.path.exists(output_path))
 
+    def test_global_versions_filter_applies_to_tag_span(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            input_dir = os.path.join(temp_dir, "input")
+            os.makedirs(input_dir)
+
+            matched_file = os.path.join(input_dir, "abc.xlsx")
+            self._write_workbook(
+                matched_file,
+                headers=["version", "key", "source"],
+                rows=[
+                    ["2.2.3", "desc", "<tag>命中术语</tag>"],
+                    ["9.9.9", "desc", "<tag>不应命中</tag>"],
+                ],
+            )
+
+            config_path = os.path.join(temp_dir, "rules.json")
+            output_path = os.path.join(temp_dir, "result.xlsx")
+            config = self._base_config()
+            config["files"] = "*"
+            config["versions"] = "2.2.3"
+            config["extractors"][0]["enabled"] = False
+            self._write_config(config_path, config)
+
+            processor = TerminologyProcessor()
+            processor.set_input_folder(input_dir)
+            processor.set_rule_config(config_path)
+            processor.set_output_file(output_path)
+            processor.process_files()
+
+            workbook = pd.read_excel(output_path, sheet_name=None)
+            details_df = workbook["details"]
+            self.assertTrue((details_df["term_raw"] == "命中术语").any())
+            self.assertFalse((details_df["term_raw"] == "不应命中").any())
+
+    def test_process_files_fails_file_when_global_versions_set_but_version_column_missing(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            input_dir = os.path.join(temp_dir, "input")
+            os.makedirs(input_dir)
+
+            target_file = os.path.join(input_dir, "abc.xlsx")
+            self._write_workbook(
+                target_file,
+                headers=["key", "source"],
+                rows=[["player_name", "术语A"]],
+            )
+
+            config_path = os.path.join(temp_dir, "rules.json")
+            output_path = os.path.join(temp_dir, "result.xlsx")
+            config = self._base_config()
+            config["files"] = "*"
+            config["versions"] = "2.1.3"
+            self._write_config(config_path, config)
+
+            processor = TerminologyProcessor()
+            processor.set_input_folder(input_dir)
+            processor.set_rule_config(config_path)
+            processor.set_output_file(output_path)
+            result = processor.process_files()
+
+            self.assertEqual(result["files_total"], 1)
+            self.assertEqual(result["files_succeeded"], 0)
+            self.assertEqual(result["files_failed"], 1)
+
     def test_loader_rejects_legacy_record_rule_conditions(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             config_path = os.path.join(temp_dir, "rules.json")
             config = self._base_config()
-            config["extractors"][0].pop("version")
             config["extractors"][0].pop("key")
             config["extractors"][0]["conditions"] = [{"column": "version", "equals": "2.1.3"}]
             self._write_config(config_path, config)

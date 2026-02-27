@@ -1,4 +1,4 @@
-﻿import unittest
+import unittest
 
 from core.terminology.extractors import ExtractContext, RecordRuleExtractor, TagSpanExtractor
 from core.terminology.types import RecordRule, TagSpanRule
@@ -23,7 +23,6 @@ class TerminologyExtractorsTestCase(unittest.TestCase):
             enabled=True,
             skip_header=True,
             term_column="source",
-            versions=("2.1.3", "2.2.3"),
             key_terms=("name",),
         )
         extractor = RecordRuleExtractor(rule)
@@ -34,19 +33,18 @@ class TerminologyExtractorsTestCase(unittest.TestCase):
         self.assertEqual(output[0].meta["key"], "player_name")
         self.assertEqual(output[0].meta["version"], "2.2.3")
 
-    def test_record_rule_extractor_non_match_version(self):
+    def test_record_rule_extractor_does_not_filter_version(self):
         rule = RecordRule(
             id="record_1",
             type="record_rule",
             enabled=True,
             skip_header=True,
             term_column="source",
-            versions=("2.1.3",),
             key_terms=("name",),
         )
         extractor = RecordRuleExtractor(rule)
         output = extractor.extract(self._context("海星花篮", version="2.3.0", key_text="player_name"))
-        self.assertEqual(output, [])
+        self.assertEqual(len(output), 1)
 
     def test_record_rule_extractor_non_match_key(self):
         rule = RecordRule(
@@ -55,7 +53,6 @@ class TerminologyExtractorsTestCase(unittest.TestCase):
             enabled=True,
             skip_header=True,
             term_column="source",
-            versions=("2.1.3",),
             key_terms=("name",),
         )
         extractor = RecordRuleExtractor(rule)
@@ -69,7 +66,6 @@ class TerminologyExtractorsTestCase(unittest.TestCase):
             enabled=True,
             skip_header=True,
             term_column="source",
-            versions=("2.1.3",),
             key_terms=("name",),
         )
         extractor = RecordRuleExtractor(rule)
@@ -83,7 +79,6 @@ class TerminologyExtractorsTestCase(unittest.TestCase):
             enabled=True,
             skip_header=True,
             term_column="source",
-            versions=("2.1.3",),
             key_terms=(r"^(player|npc)_name$",),
             key_regex=True,
         )
@@ -100,25 +95,9 @@ class TerminologyExtractorsTestCase(unittest.TestCase):
             enabled=True,
             skip_header=True,
             term_column="source",
-            versions=("2.1.3",),
             key_terms=("name",),
         )
         extractor = RecordRuleExtractor(rule)
-        self.assertEqual(extractor.required_columns(), {"version", "key", "source"})
-
-    def test_record_rule_without_version_filter(self):
-        rule = RecordRule(
-            id="record_1",
-            type="record_rule",
-            enabled=True,
-            skip_header=True,
-            term_column="source",
-            versions=tuple(),
-            key_terms=("name",),
-        )
-        extractor = RecordRuleExtractor(rule)
-        output = extractor.extract(self._context("海星花篮", version="9.9.9", key_text="player_name"))
-        self.assertEqual(len(output), 1)
         self.assertEqual(extractor.required_columns(), {"key", "source"})
 
     def test_tag_span_extractor_matches_two_close_tags(self):

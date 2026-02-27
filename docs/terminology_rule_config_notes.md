@@ -1,4 +1,4 @@
-﻿# Terminology Rule JSON 备注说明
+# Terminology Rule JSON 备注说明
 
 示例文件：`docs/sample_terminology_rules.json`
 
@@ -14,6 +14,11 @@
   - 匹配规则（大小写不敏感）：
     - 写 `abc` 可匹配 `abc.xlsx` 或 `abc.xls`
     - 写 `abc.xlsx` 则只匹配 `abc.xlsx`
+- `versions`（可选）
+  - 控制“处理哪些版本行”（基于 Excel 行内 `version` 列）。
+  - 支持数组：`["2.1.3", "2.2.3"]`
+  - 也支持逗号字符串：`"2.1.3, 2.2.3"`
+  - 缺省/空值/`"*"`/`"all"` 表示不过滤版本，处理所有版本行。
 - `compound_delimiters`（可选）
   - 复合关系后处理使用的分隔符集合。
   - 支持数组和逗号字符串。
@@ -25,7 +30,7 @@
 - `extractors`
   - 抽取器列表，按顺序执行。
 
-## 2. record_rule（version + key 双命中）
+## 2. record_rule（key 命中）
 
 - 必填字段：
   - `id`
@@ -34,10 +39,6 @@
   - `skip_header`
   - `term_column`
   - `key`
-- `version`（可选）支持：
-  - 数组：`["2.1.3", "2.2.3"]`
-  - 逗号字符串：`"2.1.3, 2.2.3"`
-  - 缺省/空值/`"*"`/`"all"` 表示不过滤版本（匹配所有版本）。
 - `key` 支持：
   - 数组：`["name", "title"]`
   - 逗号字符串：`"name, title"`
@@ -46,15 +47,16 @@
   - `true`：`key` 按“正则匹配”（大小写不敏感）。
   - 正则写错会在配置加载阶段直接报错。
 - 匹配语义：
-  - 若配置了 `version`，读取 Excel 行内 `version` 列，命中任一版本（OR）。
+  - 若配置了顶层 `versions`，行内 `version` 必须命中任一版本（OR）后才会进入 extractor。
   - 读取 Excel 行内 `key` 列，命中任一 `key` 规则（OR）。
-  - 当 `version` 有配置时，`version` 与 `key` 两组条件之间为 AND。
+  - `versions` 与 `key` 条件之间为 AND。
 
 ## 3. 重要破坏性变更
 
 - 旧写法 `record_rule.conditions` 已废弃。
 - 配置里出现 `conditions` 会直接报错。
-- 旧配置必须迁移到 `record_rule.version + record_rule.key`。
+- `record_rule.version` 也已废弃，出现会直接报错。
+- 旧配置必须迁移到 `top-level versions + record_rule.key`。
 
 ## 4. tag_span 与 compound_split
 
@@ -84,7 +86,8 @@
 ## 6. 常见注意事项
 
 - 当配置了 `files` 时，未命中的 Excel 会直接跳过，不参与统计和错误计数。
-- `version` / `key` 列按不区分大小写匹配（`Version`/`KEY` 都可）。
+- 当配置了顶层 `versions` 时，Excel 必须存在 `version` 列（大小写不敏感，如 `Version`）。
+- `key` 列按不区分大小写匹配（`KEY` 也可）。
 - 推荐先看输出 `terms_summary` 与 `relations_summary`。
 - 需要排查命中明细时，再看 `details`（包含 `file/sheet/row/col/key/version` 追溯字段）。
 

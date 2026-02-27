@@ -1,4 +1,4 @@
-﻿import re
+import re
 
 from .dedup import build_term_aggregates
 from .normalize import build_dedup_key

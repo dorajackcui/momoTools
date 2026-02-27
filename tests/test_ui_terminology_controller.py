@@ -63,12 +63,28 @@ class FakeProcessor:
         }
 
 
+class FakeStateStore:
+    def __init__(self, initial_state=None):
+        self.state = dict(initial_state or {})
+
+    def load(self):
+        return dict(self.state)
+
+    def save(self, state):
+        self.state = dict(state)
+
+
 class TerminologyControllerTestCase(unittest.TestCase):
     def test_requires_all_inputs(self):
         frame = FakeFrame()
         dialogs = FakeDialogs()
         processor = FakeProcessor()
-        controller = TerminologyExtractorController(frame, processor, dialog_service=dialogs)
+        controller = TerminologyExtractorController(
+            frame,
+            processor,
+            dialog_service=dialogs,
+            state_store=FakeStateStore(),
+        )
 
         controller.process_files()
 
@@ -79,7 +95,13 @@ class TerminologyControllerTestCase(unittest.TestCase):
         frame = FakeFrame()
         dialogs = FakeDialogs()
         processor = FakeProcessor()
-        controller = TerminologyExtractorController(frame, processor, dialog_service=dialogs)
+        state_store = FakeStateStore()
+        controller = TerminologyExtractorController(
+            frame,
+            processor,
+            dialog_service=dialogs,
+            state_store=state_store,
+        )
 
         with tempfile.TemporaryDirectory() as temp_dir:
             input_folder = temp_dir
@@ -100,6 +122,23 @@ class TerminologyControllerTestCase(unittest.TestCase):
         self.assertEqual(frame.output_file, output_file)
         self.assertTrue(processor.process_called)
         self.assertTrue(dialogs.infos)
+        self.assertEqual(state_store.state.get("terminology_rule_config_path"), rule_config)
+
+    def test_restores_persisted_rule_config_path(self):
+        frame = FakeFrame()
+        dialogs = FakeDialogs()
+        processor = FakeProcessor()
+        persisted = {"terminology_rule_config_path": __file__}
+        controller = TerminologyExtractorController(
+            frame,
+            processor,
+            dialog_service=dialogs,
+            state_store=FakeStateStore(persisted),
+        )
+
+        self.assertEqual(controller.rule_config_path, __file__)
+        self.assertEqual(frame.rule_config_path, __file__)
+        self.assertEqual(processor.rule_config, __file__)
 
 
 if __name__ == "__main__":

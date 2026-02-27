@@ -53,7 +53,7 @@ class TerminologyProcessor:
         all_candidates: list[Candidate] = []
         candidate_sequence = 0
         for file_path in file_paths:
-            candidates = self._extract_file_candidates(file_path, extractors)
+            candidates = self._extract_file_candidates(file_path, extractors, config.versions)
             if candidates is None:
                 self.stats.files_failed += 1
                 continue
@@ -170,12 +170,17 @@ class TerminologyProcessor:
                 raise ValueError(f"Unsupported rule type: {type(rule)}")
         return extractors
 
-    def _extract_file_candidates(self, file_path: str, extractors: list[BaseExtractor]) -> list[Candidate] | None:
+    def _extract_file_candidates(
+        self,
+        file_path: str,
+        extractors: list[BaseExtractor],
+        global_versions: tuple[str, ...],
+    ) -> list[Candidate] | None:
         try:
             with open_workbook(file_path, read_only=True, data_only=True) as workbook:
                 worksheet = workbook.active
                 header_map = self._build_header_map(worksheet)
-                self._ensure_required_columns(file_path, header_map, extractors)
+                self._ensure_required_columns(file_path, header_map, extractors, global_versions)
 
                 candidates: list[Candidate] = []
                 for row_idx, row in enumerate(worksheet.iter_rows(min_row=2), start=2):
@@ -189,6 +194,12 @@ class TerminologyProcessor:
                             value = None
                         row_values[header] = value
                         row_cells_text[header] = safe_to_str(value, strip=False)
+
+                    if global_versions:
+                        version_value = safe_to_str(row_values.get("version"), strip=True)
+                        if version_value not in global_versions:
+                            self.stats.rows_scanned += 1
+                            continue
 
                     context = ExtractContext(
                         file_path=file_path,
@@ -237,10 +248,13 @@ class TerminologyProcessor:
         file_path: str,
         header_map: dict[str, int],
         extractors: list[BaseExtractor],
+        global_versions: tuple[str, ...],
     ) -> None:
         required: set[str] = set()
         for extractor in extractors:
             required.update(extractor.required_columns())
+        if global_versions:
+            required.add("version")
         missing = sorted(col for col in required if col not in header_map)
         if missing:
             raise ValueError(

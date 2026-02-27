@@ -45,3 +45,5 @@ Last updated: 2026-02-26 (Terminology Extractor MVP added)
   - update `docs/SESSION_DUMP.md` first,
   - then update `docs/memo_pending_translation_rules.md` if policy changed,
   - and keep detailed IO specifics in `IO_FORMAT_REQUIREMENTS.md`.
+- Before committing broad text edits, run encoding guardrail:
+  - `python scripts/check_text_encoding.py`

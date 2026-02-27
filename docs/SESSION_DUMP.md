@@ -1,4 +1,4 @@
-﻿# Session Context Dump
+# Session Context Dump
 
 Snapshot date: 2026-02-26
 Audience: new AI/dev session handoff
@@ -65,14 +65,17 @@ Defined in `app.py`:
   - input folder
   - rule config JSON
   - output xlsx path
+  - last selected rule config JSON path is persisted and auto-restored on next app launch
 - Pipeline:
   - extraction (`record_rule`, `tag_span`)
   - normalization + dedup
   - relation build (`variant_of`, `has_head`, `has_suffix`, `head_suffix_pair`)
   - review list generation
-- `record_rule` now uses dual conditions:
-  - optional `version` filter: column hits configured versions
+- `record_rule` uses key condition:
   - `key` filter supports contains (default) or regex mode via `key_regex` (case-insensitive)
+- version filtering is global via top-level `versions`:
+  - row must match configured versions before any extractor runs
+  - missing/`*` means no version filter
 - `tag_span` supports multiple opening tags via `open_tag` (string/list/comma-string)
   or `open_tags` (list/string).
 - `compound_split` in extractor config is ignored at runtime.
@@ -83,6 +86,7 @@ Defined in `app.py`:
   - ignores `~$` temp files
   - active sheet only
   - `files` config is optional; missing/`*` means process all discovered files
+  - `versions` config is optional; missing/`*` means process all version rows
 - Output workbook sheets:
   - `terms_summary`
   - `relations_summary`

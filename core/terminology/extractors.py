@@ -38,10 +38,7 @@ class RecordRuleExtractor(BaseExtractor):
         ] if self.rule.key_regex else []
 
     def required_columns(self) -> set[str]:
-        required = {self.rule.term_column, "key"}
-        if self.rule.versions:
-            required.add("version")
-        return required
+        return {self.rule.term_column, "key"}
 
     def extract(self, context: ExtractContext) -> list[Candidate]:
         if not self.rule.enabled:
@@ -49,9 +46,6 @@ class RecordRuleExtractor(BaseExtractor):
         if self.rule.skip_header and context.row_index <= 1:
             return []
 
-        version_value = safe_to_str(context.row_values.get("version"), strip=True)
-        if self.rule.versions and version_value not in self.rule.versions:
-            return []
         key_value = safe_to_str(context.row_values.get("key"), strip=True)
         if self.rule.key_regex:
             if not any(pattern.search(key_value) for pattern in self._key_regex_patterns):
@@ -78,7 +72,7 @@ class RecordRuleExtractor(BaseExtractor):
                 cell_raw=context.row_cells_text.get(self.rule.term_column, ""),
                 meta={
                     "term_column": self.rule.term_column,
-                    "version": version_value,
+                    "version": safe_to_str(context.row_values.get("version"), strip=True),
                     "key": key_value,
                 },
             )

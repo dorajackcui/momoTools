@@ -1,4 +1,4 @@
-﻿import tkinter as tk
+import tkinter as tk
 from tkinter import ttk
 
 from controllers import (
@@ -105,6 +105,7 @@ class ExcelUpdaterApp:
         terminology_controller = TerminologyExtractorController(None, self.terminology_processor)
         terminology_frame = TerminologyExtractorFrame(utilities_notebook, terminology_controller)
         terminology_controller.frame = terminology_frame
+        terminology_controller.restore_persisted_paths()
         utilities_notebook.add(terminology_frame, text="Term Extractor")
 
     def run(self):

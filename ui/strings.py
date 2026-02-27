@@ -1,4 +1,4 @@
-﻿import os
+import os
 
 ERROR_TITLE = "Error"
 WARNING_TITLE = "Warning"

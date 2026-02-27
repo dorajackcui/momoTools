@@ -33,6 +33,7 @@ class ExtractorConfigLoader:
             raise ValueError("Config version must be 1")
 
         files = self._parse_file_filters(raw.get("files"))
+        versions = self._parse_version_filters(raw.get("versions"))
         compound_delimiters = self._parse_list_value(
             raw.get("compound_delimiters"),
             "compound_delimiters",
@@ -45,6 +46,7 @@ class ExtractorConfigLoader:
         return TerminologyConfig(
             version=version,
             files=files,
+            versions=versions,
             compound_delimiters=compound_delimiters,
             normalization=normalization,
             thresholds=thresholds,
@@ -132,14 +134,18 @@ class ExtractorConfigLoader:
         if "conditions" in raw_rule:
             raise ValueError(
                 f"record_rule.conditions is no longer supported (id={rule_id}); "
-                "use record_rule.version + record_rule.key"
+                "use top-level versions + record_rule.key"
+            )
+        if "version" in raw_rule:
+            raise ValueError(
+                f"record_rule.version is no longer supported (id={rule_id}); "
+                "use top-level versions"
             )
 
         term_column = str(raw_rule.get("term_column", "")).strip()
         if not term_column:
             raise ValueError(f"record_rule.term_column is required (id={rule_id})")
 
-        versions = self._parse_record_rule_versions(raw_rule.get("version"), rule_id)
         key_terms = self._parse_list_value(
             raw_rule.get("key"),
             f"record_rule.key (id={rule_id})",
@@ -155,26 +161,9 @@ class ExtractorConfigLoader:
             enabled=enabled,
             skip_header=bool(raw_rule.get("skip_header", True)),
             term_column=term_column,
-            versions=versions,
             key_terms=key_terms,
             key_regex=key_regex,
         )
-
-    def _parse_record_rule_versions(self, value: Any, rule_id: str) -> tuple[str, ...]:
-        # Missing/empty/"*"/"all" means no version filtering.
-        if value is None:
-            return tuple()
-        versions = self._parse_list_value(
-            value,
-            f"record_rule.version (id={rule_id})",
-            required=False,
-        )
-        if not versions:
-            return tuple()
-        lowered = {item.strip().lower() for item in versions}
-        if "*" in lowered or "all" in lowered:
-            return tuple()
-        return versions
 
     def _parse_tag_span_rule(self, raw_rule: dict[str, Any]) -> TagSpanRule:
         rule_id, enabled = self._parse_rule_identity(raw_rule, "tag_span")
@@ -269,6 +258,18 @@ class ExtractorConfigLoader:
         if "*" in lowered or "all" in lowered:
             return tuple()
         return filters
+
+    def _parse_version_filters(self, value: Any) -> tuple[str, ...]:
+        # Empty/omitted versions means "process all versions".
+        if value is None:
+            return tuple()
+        versions = self._parse_list_value(value, "versions", required=False)
+        if not versions:
+            return tuple()
+        lowered = {item.strip().lower() for item in versions}
+        if "*" in lowered or "all" in lowered:
+            return tuple()
+        return versions
 
     @staticmethod
     def _validate_regex_patterns(patterns: tuple[str, ...], field_name: str) -> None:

@@ -1,4 +1,4 @@
-﻿import pandas as pd
+import pandas as pd
 
 from .types import RelationSummaryRow, ReviewItem, TermOccurrence, TermSummaryRow
 
