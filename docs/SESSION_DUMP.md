@@ -96,7 +96,9 @@ Defined in `app.py`:
 ## 5) Source entrypoints you usually need
 
 - App wiring: `app.py`
-- UI orchestration: `controllers.py`
+- UI orchestration:
+  - `controller_modules/*` (primary controller implementations)
+  - `controllers.py` (compatibility facade)
 - Processor logic:
   - `core/excel_processor.py`
   - `core/multi_column_processor.py`

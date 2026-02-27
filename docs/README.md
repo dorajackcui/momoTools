@@ -27,7 +27,8 @@ Last updated: 2026-02-26 (Terminology Extractor MVP added)
 - Terminology extractor implementation lives in:
   - `core/terminology/*`
   - `ui/views/terminology_extractor.py`
-  - `controllers.py` (`TerminologyExtractorController`)
+  - `controller_modules/terminology_extractor.py` (`TerminologyExtractorController`)
+  - `controllers.py` (compatibility facade / re-export)
   - `app.py` (new `Utilities` tab entry)
 
 ## Archived docs
@@ -42,6 +43,8 @@ Last updated: 2026-02-26 (Terminology Extractor MVP added)
 ## Maintenance rule
 
 - If behavior changes in `controllers.py`, `core/*.py`, or UI flow:
+  - for controller logic changes, edit `controller_modules/*` first,
+  - keep `controllers.py` as compatibility facade,
   - update `docs/SESSION_DUMP.md` first,
   - then update `docs/memo_pending_translation_rules.md` if policy changed,
   - and keep detailed IO specifics in `IO_FORMAT_REQUIREMENTS.md`.
