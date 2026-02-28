@@ -1,0 +1,11 @@
+{
+  "cases": [
+    {
+      "name": "sample_equal_workbook",
+      "expected": "tests/golden/fixtures/sample_workbook/expected/target.xlsx",
+      "actual": "tests/golden/fixtures/sample_workbook/actual/target.xlsx",
+      "sheet": "active",
+      "max_diff_samples": 20
+    }
+  ]
+}

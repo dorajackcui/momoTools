@@ -1,6 +1,6 @@
 from ui import strings
-from ui.validators import ValidationError
 from .base import BaseController
+
 
 class UpdaterController(BaseController):
     def __init__(self, frame, single_processor, multi_processor, dialog_service=None):
@@ -29,20 +29,16 @@ class UpdaterController(BaseController):
         self.multi_processor.set_target_folder(folder_path)
 
     def process_files(self):
-        if not self.master_file_path or not self.target_folder:
-            self.dialogs.error(strings.ERROR_TITLE, strings.REQUIRE_MASTER_TARGET)
+        if not self._ensure_required_values(
+            [(self.master_file_path and self.target_folder, strings.REQUIRE_MASTER_TARGET)]
+        ):
             return
 
-        try:
-            config = self._require_frame().get_config()
-        except ValidationError as exc:
-            self.dialogs.error(strings.ERROR_TITLE, f"{strings.VALIDATION_CONFIG_PREFIX}{exc}")
-            return
-        except Exception as exc:
-            self.dialogs.error(strings.ERROR_TITLE, str(exc))
+        config = self._get_config_or_notify()
+        if config is None:
             return
 
-        try:
+        def run():
             if config.column_count == 1:
                 self.single_processor.set_target_column(
                     config.target_key_col,
@@ -56,19 +52,23 @@ class UpdaterController(BaseController):
                 )
                 self.single_processor.set_fill_blank_only(config.fill_blank_only)
                 self.single_processor.set_post_process_enabled(config.post_process_enabled)
-                updated_count = self.single_processor.process_files()
-            else:
-                self.multi_processor.set_target_key_column(config.target_key_col)
-                self.multi_processor.set_match_column(config.target_match_col)
-                self.multi_processor.set_update_start_column(config.target_update_start_col)
-                self.multi_processor.set_master_key_column(config.master_key_col)
-                self.multi_processor.set_master_match_column(config.master_match_col)
-                self.multi_processor.set_start_column(config.master_content_start_col)
-                self.multi_processor.set_column_count(config.column_count)
-                self.multi_processor.set_fill_blank_only(config.fill_blank_only)
-                self.multi_processor.set_post_process_enabled(config.post_process_enabled)
-                updated_count = self.multi_processor.process_files()
+                return self.single_processor.process_files()
 
-            self.dialogs.info(strings.SUCCESS_TITLE, f"共更新 {updated_count} 处数据。")
-        except Exception as exc:
-            self.dialogs.error(strings.ERROR_TITLE, str(exc))
+            self.multi_processor.set_target_key_column(config.target_key_col)
+            self.multi_processor.set_match_column(config.target_match_col)
+            self.multi_processor.set_update_start_column(config.target_update_start_col)
+            self.multi_processor.set_master_key_column(config.master_key_col)
+            self.multi_processor.set_master_match_column(config.master_match_col)
+            self.multi_processor.set_start_column(config.master_content_start_col)
+            self.multi_processor.set_column_count(config.column_count)
+            self.multi_processor.set_fill_blank_only(config.fill_blank_only)
+            self.multi_processor.set_post_process_enabled(config.post_process_enabled)
+            return self.multi_processor.process_files()
+
+        self._run_action_or_notify(
+            run,
+            on_success=lambda updated_count: self.dialogs.info(
+                strings.SUCCESS_TITLE,
+                f"共更新 {updated_count} 处数据。",
+            ),
+        )

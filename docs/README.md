@@ -1,18 +1,21 @@
 # Docs Index (Current)
 
-Last updated: 2026-02-26 (Terminology Extractor MVP added)
+Last updated: 2026-02-28 (maintainability refactor baseline added)
 
 ## Recommended reading order for a new AI session
 
 1. `docs/SESSION_DUMP.md` (project snapshot + current behavior + quick entrypoints)
-2. `docs/memo_pending_translation_rules.md` (business decisions still unresolved)
-3. `docs/troubleshooting.md` (common failures and checks)
-4. `IO_FORMAT_REQUIREMENTS.md` (strict IO contract, detailed)
+2. `docs/refactor_baseline.md` (behavior freeze boundary for maintainability refactor)
+3. `docs/memo_pending_translation_rules.md` (business decisions still unresolved)
+4. `docs/troubleshooting.md` (common failures and checks)
+5. `IO_FORMAT_REQUIREMENTS.md` (strict IO contract, detailed)
 
 ## Active docs
 
 - `docs/SESSION_DUMP.md`
   - One-file handoff context for a new session.
+- `docs/refactor_baseline.md`
+  - Refactor boundary, frozen behavior contract, and regression gate commands.
 - `docs/memo_pending_translation_rules.md`
   - Pending policy decisions for translation/data handling.
 - `docs/troubleshooting.md`

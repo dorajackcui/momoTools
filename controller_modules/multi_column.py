@@ -1,6 +1,6 @@
 from ui import strings
-from ui.validators import ValidationError
 from .base import BaseController
+
 
 class MultiColumnController(BaseController):
     def __init__(self, frame, processor, dialog_service=None):
@@ -26,12 +26,16 @@ class MultiColumnController(BaseController):
         self.processor.set_target_folder(folder_path)
 
     def process_multi_column(self):
-        if not self.master_file_path or not self.target_folder:
-            self.dialogs.error(strings.ERROR_TITLE, strings.REQUIRE_MASTER_TARGET)
+        if not self._ensure_required_values(
+            [(self.master_file_path and self.target_folder, strings.REQUIRE_MASTER_TARGET)]
+        ):
             return
 
-        try:
-            config = self._require_frame().get_config()
+        config = self._get_config_or_notify()
+        if config is None:
+            return
+
+        def run():
             self.processor.set_target_key_column(config.target_key_col)
             self.processor.set_match_column(config.target_match_col)
             self.processor.set_update_start_column(config.target_update_start_col)
@@ -41,15 +45,12 @@ class MultiColumnController(BaseController):
             self.processor.set_column_count(config.column_count)
             self.processor.set_fill_blank_only(config.fill_blank_only)
             self.processor.set_post_process_enabled(config.post_process_enabled)
-        except ValidationError as exc:
-            self.dialogs.error(strings.ERROR_TITLE, f"{strings.VALIDATION_CONFIG_PREFIX}{exc}")
-            return
-        except Exception as exc:
-            self.dialogs.error(strings.ERROR_TITLE, str(exc))
-            return
+            return self.processor.process_files()
 
-        try:
-            updated_count = self.processor.process_files()
-            self.dialogs.info(strings.SUCCESS_TITLE, f"共更新 {updated_count} 处数据。")
-        except Exception as exc:
-            self.dialogs.error(strings.ERROR_TITLE, str(exc))
+        self._run_action_or_notify(
+            run,
+            on_success=lambda updated_count: self.dialogs.info(
+                strings.SUCCESS_TITLE,
+                f"共更新 {updated_count} 处数据。",
+            ),
+        )

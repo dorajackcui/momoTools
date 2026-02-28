@@ -1,6 +1,6 @@
 from ui import strings
-from ui.validators import ValidationError
 from .base import BaseController
+
 
 class ClearerController(BaseController):
     def __init__(self, frame, clearer, dialog_service=None):
@@ -17,29 +17,25 @@ class ClearerController(BaseController):
         self.clearer.set_folder_path(folder_path)
 
     def _with_column_config(self, action, success_template, confirm_message=None):
-        if not self.target_folder:
-            self.dialogs.error(strings.ERROR_TITLE, strings.REQUIRE_TARGET_FOLDER)
+        if not self._ensure_required_values([(self.target_folder, strings.REQUIRE_TARGET_FOLDER)]):
             return
 
-        try:
-            config = self._require_frame().get_config()
-            self.clearer.set_column_number(config.column_number)
-        except ValidationError as exc:
-            self.dialogs.error(strings.ERROR_TITLE, f"{strings.VALIDATION_COLUMN_PREFIX}{exc}")
+        config = self._get_config_or_notify(validation_prefix=strings.VALIDATION_COLUMN_PREFIX)
+        if config is None:
             return
-        except Exception as exc:
-            self.dialogs.error(strings.ERROR_TITLE, str(exc))
-            return
+        self.clearer.set_column_number(config.column_number)
 
         if confirm_message:
             if not self.dialogs.confirm(strings.CONFIRM_TITLE, confirm_message.format(column_number=config.column_number)):
                 return
 
-        try:
-            processed_files = action()
-            self.dialogs.info(strings.SUCCESS_TITLE, success_template.format(processed_files=processed_files))
-        except Exception as exc:
-            self.dialogs.error(strings.ERROR_TITLE, str(exc))
+        self._run_action_or_notify(
+            action,
+            on_success=lambda processed_files: self.dialogs.info(
+                strings.SUCCESS_TITLE,
+                success_template.format(processed_files=processed_files),
+            ),
+        )
 
     def clear_column(self):
         self._with_column_config(

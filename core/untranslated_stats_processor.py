@@ -102,7 +102,14 @@ class UntranslatedStatsProcessor:
                             char_count = self.count_characters(source_text)
                             untranslated_chars += char_count
                             untranslated_rows += 1
-                    except Exception:
+                    except Exception as row_exc:
+                        self._log_error(
+                            "E_STATS_ROW",
+                            "统计行处理失败，已跳过",
+                            file_path=file_path,
+                            exc=row_exc,
+                            context={"row": row_idx},
+                        )
                         continue
 
             file_name = os.path.basename(file_path)

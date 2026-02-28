@@ -1,7 +1,8 @@
 import os
+
 from ui import strings
-from ui.validators import ValidationError
 from .base import BaseController
+
 
 class UntranslatedStatsController(BaseController):
     def __init__(self, frame, processor, dialog_service=None):
@@ -49,25 +50,19 @@ class UntranslatedStatsController(BaseController):
         self._set_output_file(file_path)
 
     def process_stats(self):
-        if not self.target_folder:
-            self.dialogs.error(strings.ERROR_TITLE, strings.REQUIRE_STATS_FOLDER)
+        if not self._ensure_required_values([(self.target_folder, strings.REQUIRE_STATS_FOLDER)]):
             return
 
         if not self.output_file:
             self._set_output_file(self._build_auto_output_file(self.target_folder))
 
-        try:
-            config = self._require_frame().get_config()
-            self.processor.set_columns(config.source_col, config.translation_col)
-            self.processor.set_stats_mode(config.stats_mode)
-        except ValidationError as exc:
-            self.dialogs.error(strings.ERROR_TITLE, f"{strings.VALIDATION_CONFIG_PREFIX}{exc}")
+        config = self._get_config_or_notify()
+        if config is None:
             return
-        except Exception as exc:
-            self.dialogs.error(strings.ERROR_TITLE, str(exc))
-            return
+        self.processor.set_columns(config.source_col, config.translation_col)
+        self.processor.set_stats_mode(config.stats_mode)
 
-        try:
+        def run():
             stats_results = self.processor.process_files()
             if not stats_results:
                 self.dialogs.warning(strings.WARNING_TITLE, "未找到任何Excel文件或所有文件都没有未翻译内容")
@@ -76,7 +71,10 @@ class UntranslatedStatsController(BaseController):
             self.processor.export_to_excel(self.output_file)
             self.dialogs.info(
                 strings.SUCCESS_TITLE,
-                f"统计完成！\n共处理 {len(stats_results)} 个文件\n结果已保存到: {self.output_file}",
+                f"统计完成：\n共处理 {len(stats_results)} 个文件\n结果已保存到: {self.output_file}",
             )
-        except Exception as exc:
-            self.dialogs.error(strings.ERROR_TITLE, f"处理过程中发生错误：{exc}")
+
+        self._run_action_or_notify(
+            run,
+            error_title=strings.ERROR_TITLE,
+        )

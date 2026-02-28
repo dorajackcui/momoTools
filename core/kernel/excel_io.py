@@ -108,8 +108,14 @@ def run_parallel_map(
     max_workers = max(1, max_workers)
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
-        futures = [executor.submit(worker, item) for item in items]
-        return [future.result() for future in concurrent.futures.as_completed(futures)]
+        future_to_index = {
+            executor.submit(worker, item): index for index, item in enumerate(items)
+        }
+        results: List[Any] = [None] * len(items)
+        for future in concurrent.futures.as_completed(future_to_index):
+            index = future_to_index[future]
+            results[index] = future.result()
+        return results
 
 
 def run_parallel_sum(

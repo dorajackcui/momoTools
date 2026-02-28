@@ -9,3 +9,4 @@
 | cleaner_001 | ExcelColumnClearer | Real data | Yes | clear/insert/delete column | TBD | Pending |
 | compatibility_001 | ExcelCompatibilityProcessor | Real data | Yes | open/save fallback | TBD | Pending |
 | deep_replace_001 | DeepReplaceProcessor | Real data | Yes | rollback on failure | TBD | Pending |
+| golden_sample_001 | Workbook comparator | Synthetic tiny fixture | Yes | manifest wiring, report generation | Team | Ready |

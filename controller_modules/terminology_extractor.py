@@ -1,8 +1,10 @@
 import os
 from tkinter import filedialog
+
 from ui import strings
 from .base import BaseController
 from .path_state import TerminologyPathStateStore
+
 
 class TerminologyExtractorController(BaseController):
     def __init__(self, frame, processor, dialog_service=None, state_store=None):
@@ -62,12 +64,15 @@ class TerminologyExtractorController(BaseController):
         self.processor.set_output_file(file_path)
 
     def process_files(self):
-        if not self.input_folder or not self.rule_config_path or not self.output_file:
-            self.dialogs.error(strings.ERROR_TITLE, strings.REQUIRE_TERMINOLOGY_INPUT)
+        if not self._ensure_required_values(
+            [(self.input_folder and self.rule_config_path and self.output_file, strings.REQUIRE_TERMINOLOGY_INPUT)]
+        ):
             return
 
-        try:
-            result = self.processor.process_files()
+        def run():
+            return self.processor.process_files()
+
+        def on_success(result):
             self.dialogs.info(
                 strings.SUCCESS_TITLE,
                 (
@@ -79,5 +84,5 @@ class TerminologyExtractorController(BaseController):
                     f"Review: {result['review_count']}"
                 ),
             )
-        except Exception as exc:
-            self.dialogs.error(strings.ERROR_TITLE, str(exc))
+
+        self._run_action_or_notify(run, on_success=on_success)

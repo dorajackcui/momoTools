@@ -1,8 +1,6 @@
-import os
 import time
 
 import pandas as pd
-from win32com.client import Dispatch
 
 from core.kernel import (
     ErrorEvent,
@@ -13,10 +11,10 @@ from core.kernel import (
     build_combined_key,
     is_blank_value,
     iter_excel_files,
-    run_parallel_sum,
     safe_to_str,
 )
 from core.kernel.excel_io import open_workbook
+from core.pipeline import process_files_in_parallel, run_excel_com_post_process
 
 
 class MultiColumnExcelProcessor:
@@ -214,7 +212,7 @@ class MultiColumnExcelProcessor:
         self.log(f"找到 {len(file_paths)} 个目标文件")
 
         process_start_time = time.time()
-        updated_count = run_parallel_sum(
+        updated_count = process_files_in_parallel(
             file_paths,
             lambda fp: self._process_single_file(fp, master_dict),
             max_workers_cap=32,
@@ -264,7 +262,14 @@ class MultiColumnExcelProcessor:
                             update_col = self.update_start_column_index + i + 1
                             updates[(idx, update_col)] = content_value
                             updated += 1
-                    except Exception:
+                    except Exception as row_exc:
+                        self._log_error(
+                            "E_TARGET_ROW",
+                            "目标文件行处理失败，已跳过",
+                            file_path=file_path,
+                            row=idx,
+                            exc=row_exc,
+                        )
                         continue
         except Exception as exc:
             self.stats.files_failed += 1
@@ -293,31 +298,16 @@ class MultiColumnExcelProcessor:
         if not file_paths:
             return
 
-        try:
-            post_process_start_time = time.time()
-            total_files = len(file_paths)
-            excel_app = Dispatch("Excel.Application")
-            excel_app.Visible = False
-            excel_app.DisplayAlerts = False
-
-            try:
-                for index, file_path in enumerate(file_paths, 1):
-                    print(
-                        f"\r正在后处理文件 ({index}/{total_files}): {os.path.basename(file_path)}",
-                        end="",
-                    )
-                    self._process_single_file_post(file_path, excel_app)
-            finally:
-                if excel_app is not None:
-                    try:
-                        excel_app.Quit()
-                    except Exception:
-                        pass
-                    excel_app = None
-
-            self.log(f"后处理步骤耗时: {time.time() - post_process_start_time:.2f}秒")
-        except Exception as exc:
-            self._log_error("E_POST_PROCESS", "后处理步骤失败", exc=exc)
+        run_excel_com_post_process(
+            file_paths=file_paths,
+            per_file_runner=self._process_single_file_post,
+            log_callback=self.log,
+            fail_callback=lambda exc: self._log_error(
+                "E_POST_PROCESS",
+                "后处理步骤失败",
+                exc=exc,
+            ),
+        )
 
     def _process_single_file_post(self, file_path, excel_app):
         try:
@@ -333,3 +323,4 @@ class MultiColumnExcelProcessor:
                 file_path=file_path,
                 exc=exc,
             )
+

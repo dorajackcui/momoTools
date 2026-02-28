@@ -1,119 +1,129 @@
-# TM_Builder 输入/输出格式要求（基于当前代码）
+# TM_builder 输入/输出判定规范（当前实现）
 
-本文总结项目中对 Excel 读入/输出格式的严格要求与默认列约定，来源于 `core/` 里的处理器实现。
+更新时间：2026-02-28  
+范围：只描述当前代码行为，不代表“理想行为”。
 
-**通用规则**
-- 仅处理 Excel 文件：扩展名为 `.xlsx` 或 `.xls`。
-- 默认只处理“活动工作表”（`wb.active`），不会遍历多个 sheet。
-- 绝大多数处理依赖 `key + match` 的组合键，组合方式为 `f"{key}|{match}"`，两者都会 `strip()` 去前后空格。
-- `key` 或 `match` 为空时，该行会被跳过。
-- 多数读入将数据当作字符串处理（`dtype=str` 或显式 `str()`）。
-- 列索引默认是 **0-based**（第 1 列索引=0），除非特别说明。
-- 文件夹扫描是递归的，包含子目录。
+## 1. 适用场景
 
-**UI 入口统一说明（Master -> 小表）**
-- UI 仅保留一个入口：`Master到小表`。
-- `更新列数 = 1` 时：按单列处理（`ExcelProcessor`）。
-- `更新列数 > 1` 时：按多列处理（`MultiColumnExcelProcessor`）。
-- 统一字段模型为“更新开始列 + 更新列数”；默认列使用单列默认值。
+本文聚焦你关心的 3 个核心流程：
 
-**模式一：Master → 小表（单列更新）**
-- 代码位置：`core/excel_processor.py`
-- 目标：用 Master 表的“默认译文列”去更新目标小表的“译文列”。
-- Master 表列默认（0-based）：
-  - `key` 列：1
-  - `match`（原文）列：2
-  - `content`（默认译文）列：3
-- 目标小表列默认（0-based）：
-  - `key` 列：0
-  - `match`（原文）列：1
-  - `update`（译文）列：2
-- 读取 Master 时只读指定列，且 `keep_default_na=False`，空字符串不会被转成 NA。
-- 读取/更新小表：
-  - 读取时使用 `openpyxl` 只读模式，遍历所有行（不跳过表头）。
-  - 写入时用 `openpyxl` 普通模式，写回同一个文件。
-  - 写入列索引为 `target_update_col + 1`（openpyxl 写入是 1-based）。
-  - 写入模式支持“覆盖/填空”：
-    - 覆盖（默认）：命中后直接写入译文列（保持历史行为）。
-    - 填空：仅当目标译文列为空时写入。
-  - 后处理（Excel COM 打开并保存）为可选项，默认开启，可在 UI 里关闭。
-  - 关闭后处理仅跳过兼容性保存步骤，不影响前置填表写入逻辑。
+1. `Master -> 小表（单列）`：`core/excel_processor.py`
+2. `Master -> 小表（多列）`：`core/multi_column_processor.py`
+3. `小表 -> Master（反向）`：`core/reverse_excel_processor.py`
 
-**模式二：Master → 小表（多列更新）**
-- 代码位置：`core/multi_column_processor.py`
-- 目标：从 Master 读取多个内容列，按 `key+match` 批量更新小表多个目标列。
-- Master 表默认列（0-based）：
-  - `key` 列：1
-  - `match` 列：2
-  - 内容起始列：4（从第 5 列开始）
-  - 更新列数：7
-- 目标小表默认列（0-based）：
-  - `key` 列：1（第 2 列）
-  - `match` 列：2（第 3 列）
-  - 更新起始列：4（第 5 列）
-- 读取 Master 时会动态计算 `usecols`，若失败会读取全部列。
-- 小表更新列索引 = `update_start_column_index + i + 1`（openpyxl 写入 1-based）。
-- 同样遍历所有行（不跳过表头）。
-- 写入模式支持“覆盖/填空”：
-  - 覆盖（默认）：命中后按配置列批量写入。
-  - 填空：按单元格判断，仅空白目标单元格写入，非空保持不变。
-- 后处理（Excel COM 打开并保存）为可选项，默认开启，可在 UI 里关闭。
-- 关闭后处理仅跳过兼容性保存步骤，不影响前置填表写入逻辑。
+不覆盖 UI 展示细节，只覆盖读写判定与特殊值处理。
 
-**模式三：小表 → Master（反向更新）**
-- 代码位置：`core/reverse_excel_processor.py`
-- 目标：从小表读取译文，回填 Master。
-- 小表默认列（0-based）：
-  - `key` 列：0
-  - `match` 列：1
-  - `content`（译文）列：2
-- Master 默认列（0-based）：
-  - `key` 列：1
-  - `match` 列：2
-  - `update`（要写入）列：3
-- 小表读取从第 2 行开始（`min_row=2`），默认跳过表头。
-- Master 更新遍历所有行（不跳过表头）。
-- 写入模式支持“覆盖/填空”：
-  - 覆盖（默认）：命中后直接覆盖 Master 译文列。
-  - 填空：仅当 Master 译文列为空时才写入。
+## 2. 判定基础（统一规则）
 
-**未翻译统计（读入+输出）**
-- 代码位置：`core/untranslated_stats_processor.py`
-- 读入要求：
-  - 仅统计活动工作表。
-  - 默认跳过第一行（认为是表头）。
-  - 默认列（0-based）：原文列=1，译文列=2。
-  - 原文为空时整行跳过。
-- 输出要求：
-  - 导出为 Excel（`openpyxl`），sheet 名称为 `未翻译统计`。
-  - 列标题会根据统计模式设置（中文字符/英文单词）。
-  - 统计结果包含汇总行，并设置列宽。
+来源：`core/kernel/excel_io.py`
 
-**列清理/插入/删除（兼容性要求严格）**
-- 代码位置：`core/excel_cleaner.py`
-- 依赖 `win32com` 调用本机 Excel。
-- `column_number` 是 Excel 的 **1-based** 列号（与 openpyxl 的 0-based 不同）。
-- `clear_column_in_files`：清空指定列的内容（从第 2 行开始，保留表头）。
-- `insert_column_in_files`：在指定列位置插入新列，并写入表头 `Translation`。
-- `delete_column_in_files`：删除指定列。
+### 2.1 组合键构造
 
-**兼容性修复（强制用 Excel 重新保存）**
-- 代码位置：`core/excel_compatibility_processor.py`
-- 用 `win32com` 打开并保存所有 `.xlsx/.xls` 文件以确保兼容性。
-- 需要本机安装 Excel。
+- 函数：`build_combined_key(key_value, match_value, separator='|')`
+- 内部先对 `key_value` / `match_value` 调用 `safe_to_str(..., strip=True)`
+- 规则：
+  - `None -> ""`
+  - 字符串会 `strip()`
+  - 非字符串（如 `0`、`0.0`、`float('nan')`）会转成字符串后再判定
+- 只要 `key` 或 `match` 任一最终为空字符串，就返回 `None`（该行跳过）
 
-**深度替换（文件级别）**
-- 代码位置：`core/deep_replace_processor.py`
-- 以文件名为匹配条件：
-  - 源文件夹 A 的 Excel 文件会在目标文件夹 B 中寻找同名文件并替换。
-  - 仅处理 `.xlsx/.xls`，并忽略以 `~$` 开头的临时文件。
-- 会先生成 `.bak` 备份，成功后删除备份，失败时回滚。
+### 2.2 “空白单元格”判定（仅用于 fill_blank_only）
 
-**注意事项（容易踩坑）**
-- 表头行是否会被处理因模式不同：
-  - `excel_processor` / `multi_column_processor` 默认不跳过表头。
-  - `reverse_excel_processor` / `untranslated_stats_processor` 默认跳过表头。
-- 目标文件夹中若存在临时文件（`~$`）会在部分功能被忽略，但在部分功能仍会被处理。
-- 如果列索引配置错误，可能出现“列越界”导致行被跳过或更新失败。
+- 函数：`is_blank_value(value)`
+- 仅以下两类算“空白”：
+  - `value is None`
+  - `value` 是字符串且 `value.strip() == ""`
+- 这意味着：
+  - `0` / `0.0` 不是空白
+  - `float('nan')` 不是空白
+  - 字符串 `"nan"` 不是空白
 
-如需把这些默认列配置同步到 UI 或配置文件，请告诉我当前 UI 的列设置入口位置。
+## 3. Master -> 小表（单列）
+
+文件：`core/excel_processor.py`
+
+### 3.1 读取 Master
+
+- 使用 `pandas.read_excel(..., keep_default_na=False, na_filter=False, usecols=...)`
+- 构建 `master_dict` 时：
+  - 键：`build_combined_key(master_key, master_match)`
+  - 值：`safe_to_str(master_content, strip=False)`
+- 值列结果：
+  - `None -> ""`
+  - `0 -> "0"`
+  - `float('nan') -> "nan"`（字符串）
+  - `"  abc  "` 保留原空格（不 strip）
+
+### 3.2 扫描小表并写回
+
+- 逐行读取目标小表（active sheet）
+- 用小表 `key+match` 构造组合键并匹配 `master_dict`
+- 命中后写入更新列
+- `fill_blank_only=True` 时，仅当当前单元格满足 `is_blank_value` 才写入
+
+### 3.3 特殊值结论（单列）
+
+1. 小表更新列当前值为 `None` / `""` / `"   "`：可写入（填空模式）
+2. 小表更新列当前值为 `0` / `0.0` / `"nan"`：视为非空，不写入（填空模式）
+3. 覆盖模式下（`fill_blank_only=False`）：始终写入
+
+## 4. Master -> 小表（多列）
+
+文件：`core/multi_column_processor.py`
+
+### 4.1 读取 Master
+
+- 逻辑与单列一致，区别是一次读取多列内容
+- 每个内容值都走 `safe_to_str(..., strip=False)`
+- 缺失列会补空字符串 `""`
+
+### 4.2 写回小表
+
+- 对每个命中的组合键，逐列更新目标区间
+- 每个目标单元格独立做 `fill_blank_only` 判定（仍使用 `is_blank_value`）
+
+### 4.3 特殊值结论（多列）
+
+与单列完全一致，只是按列逐格执行。
+
+## 5. 小表 -> Master（反向）
+
+文件：`core/reverse_excel_processor.py`
+
+### 5.1 读取小表
+
+- 小表从第 2 行开始读取（`min_row=2`）
+- 组合键规则仍为 `build_combined_key`
+- 小表内容列写入内存前：`safe_to_str(content, strip=False)`
+  - `None -> ""`
+  - `0 -> "0"`
+  - `float('nan') -> "nan"`
+
+### 5.2 更新 Master
+
+- 遍历 Master，按 `master key+match` 匹配小表字典
+- 命中后写 `master_update_col`
+- `fill_blank_only=True` 时，仅当 Master 当前值满足 `is_blank_value` 才写入
+
+### 5.3 反向合并顺序
+
+- 目标小表文件路径先按 `lower()` 排序
+- 并发结果按输入顺序回收
+- 若多个小表提供同一组合键，后出现文件会覆盖先出现文件（稳定且可预测）
+
+## 6. 特殊值总表（你最关心）
+
+| 值 | 作为 key/match | 作为“待写入内容” | 在 fill_blank_only 下是否算“目标空白” |
+| --- | --- | --- | --- |
+| `None` | 转 `""`，导致组合键无效（行跳过） | 写成 `""` | 是 |
+| `""` | 空，组合键无效（行跳过） | 写成 `""` | 是 |
+| `"   "` | `strip` 后为空，组合键无效 | 原样写入（保留空格） | 是（因 `strip` 后空） |
+| `0` / `0.0` | 转 `"0"` / `"0.0"`，可参与匹配 | 写成字符串 `"0"` / `"0.0"` | 否 |
+| `float('nan')` | 转 `"nan"`，可参与匹配 | 写成字符串 `"nan"` | 否 |
+| `"nan"` | 非空，可参与匹配 | 写成 `"nan"` | 否 |
+
+## 7. 关键提醒
+
+1. 当前实现里，`NaN` 不等于“空白”；只有 `None` 和“去空格后为空字符串”才是空白。  
+2. `0` 始终视为有效非空值，不会在填空模式下被覆盖。  
+3. 内容写入前普遍会走字符串化（`safe_to_str`），因此数值可能落盘为文本形式。  

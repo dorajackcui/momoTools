@@ -1,5 +1,7 @@
+from dataclasses import dataclass
 import tkinter as tk
 from tkinter import ttk
+from typing import Callable, Optional
 
 from controllers import (
     ClearerController,
@@ -30,10 +32,19 @@ from ui.views import (
 )
 
 
+@dataclass(frozen=True)
+class ToolSpec:
+    group: str
+    tab_text: str
+    controller_factory: Callable[["ExcelUpdaterApp"], object]
+    frame_cls: type
+    after_mount: Optional[Callable[[object], None]] = None
+
+
 class ExcelUpdaterApp:
     def __init__(self):
         self.root = tk.Tk()
-        self.root.title("Momo——Build your mastersheet")
+        self.root.title("Momo build your mastersheet")
         self.root.geometry("540x680")
         self.root.minsize(520, 640)
         self.root.resizable(True, True)
@@ -59,54 +70,88 @@ class ExcelUpdaterApp:
         self.untranslated_stats_processor = UntranslatedStatsProcessor(print)
         self.terminology_processor = TerminologyProcessor(print)
 
+    def _build_tool_specs(self):
+        return [
+            ToolSpec(
+                group="main",
+                tab_text="Master->Target",
+                controller_factory=lambda app: UpdaterController(
+                    None, app.excel_processor, app.multi_processor
+                ),
+                frame_cls=UpdaterFrame,
+            ),
+            ToolSpec(
+                group="main",
+                tab_text="Target->Master",
+                controller_factory=lambda app: ReverseUpdaterController(
+                    None, app.reverse_excel_processor
+                ),
+                frame_cls=ReverseUpdaterFrame,
+            ),
+            ToolSpec(
+                group="utilities",
+                tab_text="Column Clear",
+                controller_factory=lambda app: ClearerController(None, app.clearer),
+                frame_cls=ClearerFrame,
+            ),
+            ToolSpec(
+                group="utilities",
+                tab_text="Compatibility",
+                controller_factory=lambda app: CompatibilityController(
+                    None, app.compatibility_processor
+                ),
+                frame_cls=CompatibilityFrame,
+            ),
+            ToolSpec(
+                group="utilities",
+                tab_text="Deep Replace",
+                controller_factory=lambda app: DeepReplaceController(
+                    None, app.deep_replace_processor
+                ),
+                frame_cls=DeepReplaceFrame,
+            ),
+            ToolSpec(
+                group="utilities",
+                tab_text="Untranslated Stats",
+                controller_factory=lambda app: UntranslatedStatsController(
+                    None, app.untranslated_stats_processor
+                ),
+                frame_cls=UntranslatedStatsFrame,
+            ),
+            ToolSpec(
+                group="utilities",
+                tab_text="Term Extractor",
+                controller_factory=lambda app: TerminologyExtractorController(
+                    None, app.terminology_processor
+                ),
+                frame_cls=TerminologyExtractorFrame,
+                after_mount=lambda controller: controller.restore_persisted_paths(),
+            ),
+        ]
+
     def init_components(self):
-        main_tools_frame = ttk.Frame(self.notebook)
-        utilities_frame = ttk.Frame(self.notebook)
+        top_group_frames = {
+            "main": ttk.Frame(self.notebook),
+            "utilities": ttk.Frame(self.notebook),
+        }
+        self.notebook.add(top_group_frames["main"], text="Main Tools")
+        self.notebook.add(top_group_frames["utilities"], text="Utilities")
 
-        self.notebook.add(main_tools_frame, text="Main Tools")
-        self.notebook.add(utilities_frame, text="Utilities")
+        group_notebooks = {
+            "main": ttk.Notebook(top_group_frames["main"], takefocus=False),
+            "utilities": ttk.Notebook(top_group_frames["utilities"], takefocus=False),
+        }
+        for notebook in group_notebooks.values():
+            notebook.pack(expand=True, fill="both", padx=6, pady=6)
 
-        main_notebook = ttk.Notebook(main_tools_frame, takefocus=False)
-        main_notebook.pack(expand=True, fill="both", padx=6, pady=6)
-
-        utilities_notebook = ttk.Notebook(utilities_frame, takefocus=False)
-        utilities_notebook.pack(expand=True, fill="both", padx=6, pady=6)
-
-        updater_controller = UpdaterController(None, self.excel_processor, self.multi_processor)
-        updater_frame = UpdaterFrame(main_notebook, updater_controller)
-        updater_controller.frame = updater_frame
-        main_notebook.add(updater_frame, text="Master->Target")
-
-        reverse_updater_controller = ReverseUpdaterController(None, self.reverse_excel_processor)
-        reverse_updater_frame = ReverseUpdaterFrame(main_notebook, reverse_updater_controller)
-        reverse_updater_controller.frame = reverse_updater_frame
-        main_notebook.add(reverse_updater_frame, text="Target->Master")
-
-        clearer_controller = ClearerController(None, self.clearer)
-        clearer_frame = ClearerFrame(utilities_notebook, clearer_controller)
-        clearer_controller.frame = clearer_frame
-        utilities_notebook.add(clearer_frame, text="Column Clear")
-
-        compatibility_controller = CompatibilityController(None, self.compatibility_processor)
-        compatibility_frame = CompatibilityFrame(utilities_notebook, compatibility_controller)
-        compatibility_controller.frame = compatibility_frame
-        utilities_notebook.add(compatibility_frame, text="Compatibility")
-
-        deep_replace_controller = DeepReplaceController(None, self.deep_replace_processor)
-        deep_replace_frame = DeepReplaceFrame(utilities_notebook, deep_replace_controller)
-        deep_replace_controller.frame = deep_replace_frame
-        utilities_notebook.add(deep_replace_frame, text="Deep Replace")
-
-        untranslated_stats_controller = UntranslatedStatsController(None, self.untranslated_stats_processor)
-        untranslated_stats_frame = UntranslatedStatsFrame(utilities_notebook, untranslated_stats_controller)
-        untranslated_stats_controller.frame = untranslated_stats_frame
-        utilities_notebook.add(untranslated_stats_frame, text="Untranslated Stats")
-
-        terminology_controller = TerminologyExtractorController(None, self.terminology_processor)
-        terminology_frame = TerminologyExtractorFrame(utilities_notebook, terminology_controller)
-        terminology_controller.frame = terminology_frame
-        terminology_controller.restore_persisted_paths()
-        utilities_notebook.add(terminology_frame, text="Term Extractor")
+        for spec in self._build_tool_specs():
+            notebook = group_notebooks[spec.group]
+            controller = spec.controller_factory(self)
+            frame = spec.frame_cls(notebook, controller)
+            controller.frame = frame
+            if spec.after_mount is not None:
+                spec.after_mount(controller)
+            notebook.add(frame, text=spec.tab_text)
 
     def run(self):
         self.root.mainloop()

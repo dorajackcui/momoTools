@@ -1,6 +1,7 @@
 from ui import strings
 from .base import BaseController
 
+
 class DeepReplaceController(BaseController):
     def __init__(self, frame, processor, dialog_service=None):
         super().__init__(frame, dialog_service=dialog_service)
@@ -25,12 +26,15 @@ class DeepReplaceController(BaseController):
         self.processor.set_target_folder(folder_path)
 
     def process_files(self):
-        if not self.source_folder or not self.target_folder:
-            self.dialogs.error(strings.ERROR_TITLE, strings.REQUIRE_SOURCE_TARGET)
+        if not self._ensure_required_values(
+            [(self.source_folder and self.target_folder, strings.REQUIRE_SOURCE_TARGET)]
+        ):
             return
 
-        try:
-            processed_files = self.processor.process_files()
-            self.dialogs.info(strings.SUCCESS_TITLE, f"共处理 {processed_files} 个文件。")
-        except Exception as exc:
-            self.dialogs.error(strings.ERROR_TITLE, str(exc))
+        self._run_action_or_notify(
+            self.processor.process_files,
+            on_success=lambda processed_files: self.dialogs.info(
+                strings.SUCCESS_TITLE,
+                f"共处理 {processed_files} 个文件。",
+            ),
+        )

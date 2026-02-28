@@ -91,7 +91,10 @@ class ReverseExcelProcessor:
         return updated_count
 
     def _read_target_files(self):
-        file_paths = iter_excel_files(self.target_folder, extensions=self.io_contract.extensions)
+        file_paths = sorted(
+            iter_excel_files(self.target_folder, extensions=self.io_contract.extensions),
+            key=lambda path: path.lower(),
+        )
         self.stats.files_total = len(file_paths)
         self.log(f"找到 {len(file_paths)} 个目标文件")
 

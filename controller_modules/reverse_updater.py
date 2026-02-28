@@ -1,6 +1,6 @@
 from ui import strings
-from ui.validators import ValidationError
 from .base import BaseController
+
 
 class ReverseUpdaterController(BaseController):
     def __init__(self, frame, processor, dialog_service=None):
@@ -26,24 +26,34 @@ class ReverseUpdaterController(BaseController):
         self.processor.set_target_folder(folder_path)
 
     def process_files(self):
-        if not self.master_file_path or not self.target_folder:
-            self.dialogs.error(strings.ERROR_TITLE, strings.REQUIRE_MASTER_TARGET)
+        if not self._ensure_required_values(
+            [(self.master_file_path and self.target_folder, strings.REQUIRE_MASTER_TARGET)]
+        ):
             return
 
-        try:
-            config = self._require_frame().get_config()
-            self.processor.set_target_columns(config.target_key_col, config.target_match_col, config.target_content_col)
-            self.processor.set_master_columns(config.master_key_col, config.master_match_col, config.master_update_col)
+        config = self._get_config_or_notify()
+        if config is None:
+            return
+
+        def run():
+            self.processor.set_target_columns(
+                config.target_key_col,
+                config.target_match_col,
+                config.target_content_col,
+            )
+            self.processor.set_master_columns(
+                config.master_key_col,
+                config.master_match_col,
+                config.master_update_col,
+            )
             self.processor.set_fill_blank_only(config.fill_blank_only)
-        except ValidationError as exc:
-            self.dialogs.error(strings.ERROR_TITLE, f"{strings.VALIDATION_CONFIG_PREFIX}{exc}")
-            return
-        except Exception as exc:
-            self.dialogs.error(strings.ERROR_TITLE, str(exc))
-            return
+            return self.processor.process_files()
 
-        try:
-            updated_count = self.processor.process_files()
-            self.dialogs.info(strings.SUCCESS_TITLE, f"共更新 {updated_count} 行。")
-        except Exception as exc:
-            self.dialogs.error("处理失败", str(exc))
+        self._run_action_or_notify(
+            run,
+            on_success=lambda updated_count: self.dialogs.info(
+                strings.SUCCESS_TITLE,
+                f"共更新 {updated_count} 行。",
+            ),
+            error_title="处理失败",
+        )

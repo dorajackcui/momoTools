@@ -1,6 +1,6 @@
 # Session Context Dump
 
-Snapshot date: 2026-02-27
+Snapshot date: 2026-02-28
 Audience: new AI/dev session handoff
 Scope: current working behavior (not historical design intent)
 
@@ -50,8 +50,18 @@ Defined in `app.py`:
   - available in Master->target (single/multi)
   - default enabled
   - when disabled, only skips COM save step
+- Post-process implementation detail:
+  - single/multi now share `core/pipeline/post_process.py`
+  - user-visible behavior is unchanged
 
-### 4.2 Untranslated stats export
+### 4.2 Deterministic reverse merge
+
+- Reverse mode file merge order is deterministic:
+  - target files are merged in sorted path order
+  - parallel execution collects results in input order
+- This is a stability/observability improvement, not a business-rule change.
+
+### 4.3 Untranslated stats export
 
 - In `UntranslatedStatsController`:
   - selecting target folder auto-generates output path
@@ -59,7 +69,7 @@ Defined in `app.py`:
   - manual output selection is still supported as optional override
   - if folder changes later, output path resets to new auto path
 
-### 4.3 Terminology extractor MVP
+### 4.4 Terminology extractor MVP
 
 - Input:
   - input folder
@@ -117,16 +127,14 @@ Defined in `app.py`:
 
 ## 6) Test entrypoints
 
+- Unified regression entry:
+  - `python scripts/run_regression_suite.py --with-golden`
 - Syntax smoke:
   - `python -m py_compile app.py controllers.py ui_components.py`
-- UI unit tests:
-  - `python -m unittest discover -s tests -p "test_ui_*.py"`
-- Terminology tests:
-  - `python -m unittest tests.test_terminology_extractors tests.test_terminology_processor`
-- App smoke:
-  - `python -m unittest tests.test_app_smoke`
-- Optional golden regression utility:
-  - `python scripts/run_golden_regression.py`
+- Full unit tests:
+  - `python -m unittest discover -s tests -p "test_*.py"`
+- Golden sample:
+  - `python scripts/run_golden_regression.py --manifest tests/golden/manifest.sample.json`
 
 ## 7) Known unresolved items (business/policy)
 
