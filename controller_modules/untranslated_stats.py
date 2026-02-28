@@ -5,8 +5,8 @@ from .base import BaseController
 
 
 class UntranslatedStatsController(BaseController):
-    def __init__(self, frame, processor, dialog_service=None):
-        super().__init__(frame, dialog_service=dialog_service)
+    def __init__(self, frame, processor, dialog_service=None, task_runner=None):
+        super().__init__(frame, dialog_service=dialog_service, task_runner=task_runner)
         self.processor = processor
         self.target_folder = ""
         self.output_file = ""
@@ -77,4 +77,5 @@ class UntranslatedStatsController(BaseController):
         self._run_action_or_notify(
             run,
             error_title=strings.ERROR_TITLE,
+            task_name="Untranslated Stats",
         )

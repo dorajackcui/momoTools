@@ -3,8 +3,8 @@ from .base import BaseController
 
 
 class ClearerController(BaseController):
-    def __init__(self, frame, clearer, dialog_service=None):
-        super().__init__(frame, dialog_service=dialog_service)
+    def __init__(self, frame, clearer, dialog_service=None, task_runner=None):
+        super().__init__(frame, dialog_service=dialog_service, task_runner=task_runner)
         self.clearer = clearer
         self.target_folder = ""
 
@@ -35,6 +35,7 @@ class ClearerController(BaseController):
                 strings.SUCCESS_TITLE,
                 success_template.format(processed_files=processed_files),
             ),
+            task_name="Column Clear",
         )
 
     def clear_column(self):

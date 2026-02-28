@@ -3,8 +3,8 @@ from .base import BaseController
 
 
 class UpdaterController(BaseController):
-    def __init__(self, frame, single_processor, multi_processor, dialog_service=None):
-        super().__init__(frame, dialog_service=dialog_service)
+    def __init__(self, frame, single_processor, multi_processor, dialog_service=None, task_runner=None):
+        super().__init__(frame, dialog_service=dialog_service, task_runner=task_runner)
         self.single_processor = single_processor
         self.multi_processor = multi_processor
         self.master_file_path = ""
@@ -71,4 +71,5 @@ class UpdaterController(BaseController):
                 strings.SUCCESS_TITLE,
                 f"共更新 {updated_count} 处数据。",
             ),
+            task_name="Master->Target",
         )

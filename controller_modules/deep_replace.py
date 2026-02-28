@@ -3,8 +3,8 @@ from .base import BaseController
 
 
 class DeepReplaceController(BaseController):
-    def __init__(self, frame, processor, dialog_service=None):
-        super().__init__(frame, dialog_service=dialog_service)
+    def __init__(self, frame, processor, dialog_service=None, task_runner=None):
+        super().__init__(frame, dialog_service=dialog_service, task_runner=task_runner)
         self.processor = processor
         self.source_folder = ""
         self.target_folder = ""
@@ -37,4 +37,5 @@ class DeepReplaceController(BaseController):
                 strings.SUCCESS_TITLE,
                 f"共处理 {processed_files} 个文件。",
             ),
+            task_name="Deep Replace",
         )

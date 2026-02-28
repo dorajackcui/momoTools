@@ -39,6 +39,7 @@ class ClearerFrame(BaseFrame):
             command=self.controller.clear_column,
             button_style="Secondary.TButton",
             pady=(0, theme.SPACING_XS),
+            processing_action=True,
         )
         create_action_button(
             actions,
@@ -46,6 +47,7 @@ class ClearerFrame(BaseFrame):
             command=self.controller.insert_column,
             button_style="Secondary.TButton",
             pady=(0, theme.SPACING_XS),
+            processing_action=True,
         )
         create_action_button(
             actions,
@@ -53,6 +55,7 @@ class ClearerFrame(BaseFrame):
             command=self.controller.delete_column,
             button_style="Danger.TButton",
             pady=0,
+            processing_action=True,
         )
 
     def set_target_folder_label(self, folder_path):

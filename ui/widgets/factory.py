@@ -13,6 +13,7 @@ def create_action_button(
     pady=theme.SPACING_SM,
     padx=0,
     side=None,
+    processing_action=False,
 ):
     tk_style = theme.TK_BUTTON_STYLE_MAP.get(button_style)
     if tk_style is not None:
@@ -25,6 +26,7 @@ def create_action_button(
     if side is not None:
         pack_kwargs["side"] = side
     button.pack(**pack_kwargs)
+    button._processing_action = bool(processing_action)
     return button
 
 

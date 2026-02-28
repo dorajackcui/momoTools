@@ -59,6 +59,7 @@ class BaseFrame(ttk.Frame):
             command=command,
             button_style="Primary.TButton",
             pady=pady,
+            processing_action=True,
         )
 
     @staticmethod

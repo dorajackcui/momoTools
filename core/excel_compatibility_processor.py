@@ -1,12 +1,12 @@
-from win32com.client import Dispatch
+﻿from win32com.client import Dispatch
 
 from core.kernel import ErrorEvent, EventLogger, ModeIOContract, ProcessingStats, iter_excel_files
 
 
 class ExcelCompatibilityProcessor:
-    def __init__(self):
+    def __init__(self, log_callback=None):
         self.folder_path = ""
-        self.log_callback = print
+        self.log_callback = log_callback or print
         self.io_contract = ModeIOContract(
             mode_name="compatibility_processor",
             skip_header=False,
@@ -16,6 +16,13 @@ class ExcelCompatibilityProcessor:
 
     def set_folder_path(self, folder_path):
         self.folder_path = folder_path
+
+    def set_log_callback(self, callback):
+        self.log_callback = callback or print
+        self.event_logger = EventLogger(self.log_callback, self.io_contract.mode_name)
+
+    def log(self, message):
+        self.log_callback(message)
 
     def count_excel_files(self):
         return len(
@@ -32,7 +39,7 @@ class ExcelCompatibilityProcessor:
 
     def process_files(self):
         if not self.folder_path:
-            raise ValueError("请先设置有效的文件夹路径")
+            raise ValueError("Please set a valid folder path first")
 
         file_paths = iter_excel_files(
             self.folder_path,
@@ -57,10 +64,10 @@ class ExcelCompatibilityProcessor:
                         wb.Close()
                         wb = None
                         processed_files += 1
-                        print(f"处理进度: {processed_files}/{total_files} - 当前文件: {file_name}")
+                        self.log(f"Progress: {processed_files}/{total_files} - Current file: {file_name}")
                 except Exception as exc:
-                    print(f"处理文件 {file_name} 时报错：{str(exc)}")
-                    self._log_error("E_COMPAT_FILE", "兼容性处理失败", file_path=file_path, exc=exc)
+                    self.log(f"Failed to process file {file_name}: {exc}")
+                    self._log_error("E_COMPAT_FILE", "Compatibility process failed", file_path=file_path, exc=exc)
                     if "wb" in locals():
                         try:
                             wb.Close(False)
@@ -74,5 +81,5 @@ class ExcelCompatibilityProcessor:
                 except Exception:
                     pass
 
-        print(f"\n处理完成！共处理 {processed_files}/{total_files} 个文件")
+        self.log(f"Completed: processed {processed_files}/{total_files} files")
         return processed_files

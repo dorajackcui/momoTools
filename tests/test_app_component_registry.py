@@ -7,9 +7,10 @@ import app
 class RecordingController:
     instances = []
 
-    def __init__(self, frame, *args):
+    def __init__(self, frame, *args, **kwargs):
         self.frame = frame
         self.args = args
+        self.kwargs = kwargs
         type(self).instances.append(self)
 
 
@@ -40,8 +41,8 @@ class RecordingStatsController(RecordingController):
 class RecordingTerminologyController(RecordingController):
     instances = []
 
-    def __init__(self, frame, *args):
-        super().__init__(frame, *args)
+    def __init__(self, frame, *args, **kwargs):
+        super().__init__(frame, *args, **kwargs)
         self.restore_calls = []
 
     def restore_persisted_paths(self):
@@ -116,6 +117,7 @@ class AppComponentRegistryTestCase(unittest.TestCase):
         instance.deep_replace_processor = object()
         instance.untranslated_stats_processor = object()
         instance.terminology_processor = object()
+        instance.task_runner = object()
 
         main_group_frame = MagicMock(name="main_group_frame")
         utilities_group_frame = MagicMock(name="utilities_group_frame")
@@ -158,10 +160,37 @@ class AppComponentRegistryTestCase(unittest.TestCase):
         updater_controller = RecordingUpdaterController.instances[0]
         self.assertIs(updater_controller.args[0], instance.excel_processor)
         self.assertIs(updater_controller.args[1], instance.multi_processor)
+        self.assertIs(updater_controller.kwargs["task_runner"], instance.task_runner)
         self.assertIsNotNone(updater_controller.frame)
 
+        self.assertEqual(len(RecordingReverseController.instances), 1)
+        self.assertIs(
+            RecordingReverseController.instances[0].kwargs["task_runner"],
+            instance.task_runner,
+        )
+        self.assertEqual(len(RecordingClearerController.instances), 1)
+        self.assertIs(
+            RecordingClearerController.instances[0].kwargs["task_runner"],
+            instance.task_runner,
+        )
+        self.assertEqual(len(RecordingCompatibilityController.instances), 1)
+        self.assertIs(
+            RecordingCompatibilityController.instances[0].kwargs["task_runner"],
+            instance.task_runner,
+        )
+        self.assertEqual(len(RecordingDeepReplaceController.instances), 1)
+        self.assertIs(
+            RecordingDeepReplaceController.instances[0].kwargs["task_runner"],
+            instance.task_runner,
+        )
+        self.assertEqual(len(RecordingStatsController.instances), 1)
+        self.assertIs(
+            RecordingStatsController.instances[0].kwargs["task_runner"],
+            instance.task_runner,
+        )
         self.assertEqual(len(RecordingTerminologyController.instances), 1)
         terminology_controller = RecordingTerminologyController.instances[0]
+        self.assertIs(terminology_controller.kwargs["task_runner"], instance.task_runner)
         self.assertEqual(terminology_controller.restore_calls, [True])
 
 

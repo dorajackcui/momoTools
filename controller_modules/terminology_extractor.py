@@ -7,8 +7,8 @@ from .path_state import TerminologyPathStateStore
 
 
 class TerminologyExtractorController(BaseController):
-    def __init__(self, frame, processor, dialog_service=None, state_store=None):
-        super().__init__(frame, dialog_service=dialog_service)
+    def __init__(self, frame, processor, dialog_service=None, state_store=None, task_runner=None):
+        super().__init__(frame, dialog_service=dialog_service, task_runner=task_runner)
         self.processor = processor
         self.state_store = state_store or TerminologyPathStateStore()
         self.input_folder = ""
@@ -85,4 +85,4 @@ class TerminologyExtractorController(BaseController):
                 ),
             )
 
-        self._run_action_or_notify(run, on_success=on_success)
+        self._run_action_or_notify(run, on_success=on_success, task_name="Term Extractor")

@@ -1,4 +1,4 @@
-import os
+﻿import os
 
 import win32com.client
 
@@ -6,11 +6,11 @@ from core.kernel import ErrorEvent, EventLogger, ModeIOContract, ProcessingStats
 
 
 class ExcelColumnClearer:
-    def __init__(self):
+    def __init__(self, log_callback=None):
         self.folder_path = ""
         self.column_number = 0
         self.excel = None
-        self.log_callback = print
+        self.log_callback = log_callback or print
         self.io_contract = ModeIOContract(
             mode_name="column_cleaner",
             skip_header=True,
@@ -23,6 +23,13 @@ class ExcelColumnClearer:
 
     def set_column_number(self, number):
         self.column_number = number
+
+    def set_log_callback(self, callback):
+        self.log_callback = callback or print
+        self.event_logger = EventLogger(self.log_callback, self.io_contract.mode_name)
+
+    def log(self, message):
+        self.log_callback(message)
 
     def _init_excel(self):
         if not self.excel:
@@ -58,7 +65,7 @@ class ExcelColumnClearer:
                 file_name = os.path.basename(file_path)
                 try:
                     processed_files += 1
-                    print(f"正在处理: {file_name} ({processed_files}/{total_files})")
+                    self.log(f"Processing: {file_name} ({processed_files}/{total_files})")
 
                     wb = self.excel.Workbooks.Open(file_path)
                     ws = wb.ActiveSheet
@@ -73,8 +80,8 @@ class ExcelColumnClearer:
                     wb.Save()
                     wb.Close()
                 except Exception as exc:
-                    print(f"处理文件 {file_name} 时报错：{str(exc)}")
-                    self._log_error("E_CLEAR_COLUMN", "清空列失败", file_path=file_path, exc=exc)
+                    self.log(f"Failed to process {file_name}: {exc}")
+                    self._log_error("E_CLEAR_COLUMN", "Clear column failed", file_path=file_path, exc=exc)
                     continue
         finally:
             self._quit_excel()
@@ -93,7 +100,7 @@ class ExcelColumnClearer:
                 file_name = os.path.basename(file_path)
                 try:
                     processed_files += 1
-                    print(f"\r正在处理: {file_name} ({processed_files}/{total_files})", end="")
+                    self.log(f"Processing: {file_name} ({processed_files}/{total_files})")
 
                     wb = self.excel.Workbooks.Open(file_path)
                     ws = wb.ActiveSheet
@@ -105,8 +112,8 @@ class ExcelColumnClearer:
                     wb.Save()
                     wb.Close()
                 except Exception as exc:
-                    print(f"处理文件 {file_name} 时报错：{str(exc)}")
-                    self._log_error("E_INSERT_COLUMN", "插入列失败", file_path=file_path, exc=exc)
+                    self.log(f"Failed to process {file_name}: {exc}")
+                    self._log_error("E_INSERT_COLUMN", "Insert column failed", file_path=file_path, exc=exc)
                     continue
         finally:
             self._quit_excel()
@@ -125,7 +132,7 @@ class ExcelColumnClearer:
                 file_name = os.path.basename(file_path)
                 try:
                     processed_files += 1
-                    print(f"正在处理: {file_name} ({processed_files}/{total_files})")
+                    self.log(f"Processing: {file_name} ({processed_files}/{total_files})")
 
                     wb = self.excel.Workbooks.Open(file_path)
                     ws = wb.ActiveSheet
@@ -134,8 +141,8 @@ class ExcelColumnClearer:
                     wb.Save()
                     wb.Close()
                 except Exception as exc:
-                    print(f"处理文件 {file_name} 时报错：{str(exc)}")
-                    self._log_error("E_DELETE_COLUMN", "删除列失败", file_path=file_path, exc=exc)
+                    self.log(f"Failed to process {file_name}: {exc}")
+                    self._log_error("E_DELETE_COLUMN", "Delete column failed", file_path=file_path, exc=exc)
                     continue
         finally:
             self._quit_excel()

@@ -4,12 +4,14 @@ from typing import Callable, Iterable, Optional, Tuple
 from ui import strings
 from ui.dialog_service import DialogService
 from ui.validators import ValidationError
+from .task_runner import InlineTaskRunner, TaskRunner
 
 
 class BaseController:
-    def __init__(self, frame, dialog_service=None):
+    def __init__(self, frame, dialog_service=None, task_runner: Optional[TaskRunner] = None):
         self.frame = frame
         self.dialogs = dialog_service or DialogService()
+        self.task_runner = task_runner or InlineTaskRunner()
 
     def _require_frame(self):
         if self.frame is None:
@@ -58,12 +60,29 @@ class BaseController:
         *,
         on_success: Optional[Callable[[object], None]] = None,
         error_title: str = strings.ERROR_TITLE,
+        task_name: str = "",
     ):
-        try:
-            result = action()
+        has_result = {"value": False}
+        result_holder = {"value": None}
+
+        def success_callback(result):
+            has_result["value"] = True
+            result_holder["value"] = result
             if on_success is not None:
                 on_success(result)
-            return result
-        except Exception as exc:
+
+        def error_callback(exc: Exception):
             self.dialogs.error(error_title, str(exc))
+
+        started = self.task_runner.run(
+            task_name=task_name,
+            action=action,
+            on_success=success_callback,
+            on_error=error_callback,
+        )
+        if not started:
+            self.dialogs.warning(strings.WARNING_TITLE, strings.TASK_ALREADY_RUNNING)
             return None
+        if has_result["value"]:
+            return result_holder["value"]
+        return None

@@ -3,8 +3,8 @@ from .base import BaseController
 
 
 class ReverseUpdaterController(BaseController):
-    def __init__(self, frame, processor, dialog_service=None):
-        super().__init__(frame, dialog_service=dialog_service)
+    def __init__(self, frame, processor, dialog_service=None, task_runner=None):
+        super().__init__(frame, dialog_service=dialog_service, task_runner=task_runner)
         self.processor = processor
         self.master_file_path = ""
         self.target_folder = ""
@@ -56,4 +56,5 @@ class ReverseUpdaterController(BaseController):
                 f"共更新 {updated_count} 行。",
             ),
             error_title="处理失败",
+            task_name="Target->Master",
         )
