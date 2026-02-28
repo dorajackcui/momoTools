@@ -1,55 +1,64 @@
 # Memo: Pending Translation/Data Handling Decisions
 
-Last updated: 2026-02-26
-Owner: TBD
-Status: Open
+Last updated: 2026-02-28
+Audience: product/engineering decision makers for business semantics
+Purpose: track unresolved business policy choices only
+Out of scope: architecture, async model, logging infrastructure, or tooling design
 
-This file keeps only unresolved policy questions and currently locked baselines.
+## Scope Rule
 
-## Locked baseline (already implemented)
+This file stores unresolved business decisions only.
+
+Do not place here:
+
+1. Layering or architecture guidance (use `docs/ARCHITECTURE.md`).
+2. Current runtime wiring snapshots (use `docs/SESSION_DUMP.md`).
+3. Troubleshooting operations (use `docs/troubleshooting.md`).
+
+## Locked Baseline (Already Implemented)
 
 1. Fill mode toggle exists in:
-   - `master_to_target_single`
-   - `master_to_target_multi`
-   - `target_to_master_reverse`
-2. Fill-blank rule is fixed:
-   - blank = `None`, empty string, whitespace-only string
-   - source of truth = `core/kernel/excel_io.py:is_blank_value`
-3. Post-process toggle (COM save) exists for Master -> small(single/multi), default enabled, not persisted.
+- `master_to_target_single`
+- `master_to_target_multi`
+- `target_to_master_reverse`
+2. Fill-blank rule source of truth:
+- `core/kernel/excel_io.py:is_blank_value`
+3. Post-process toggle exists for Master->target single/multi, default enabled, not persisted.
 
-## Pending 1: empty source/translation content behavior
-
-Question:
-- For matched rows where incoming content is empty-string (`""`), should update behavior clear existing target cell or keep existing value?
-
-Current implementation tendency:
-- values are passed through logical string flow; business intent for empty-string is not formally locked.
-
-Decision needed:
-- Option A: allow clearing target cell with empty-string input
-- Option B: keep original target cell when incoming is empty-string
-
-Suggested acceptance cases:
-- matched row + target cell already has text + incoming empty-string
-- verify behavior under both `覆盖` and `填空` modes
-
-## Pending 2: number/string display fidelity
+## Pending 1: Empty incoming content behavior
 
 Question:
-- Should output preserve logical value (`str(value)`), or preserve exact Excel displayed text/format?
 
-Current implementation tendency:
-- mostly logical value path; may differ from display formatting (e.g., `1`, `1.0`, formatted date/percentage).
+For matched rows where incoming content is empty string (`""`), should update clear target cell or keep existing value?
 
-Decision needed:
-- Option A: keep logical value standardization
-- Option B: preserve display-format text
+Options:
+
+1. Allow clearing target cell with empty-string input.
+2. Keep existing target cell when incoming content is empty-string.
 
 Suggested acceptance cases:
-- `0`, `1`, `1.0`, `00123`, date-formatted cell, percentage-formatted cell
 
-## Related references
+1. Matched row + existing target text + incoming empty-string under overwrite mode.
+2. Same under fill-blank-only mode.
 
-- Detailed IO behavior: `IO_FORMAT_REQUIREMENTS.md`
-- Session snapshot: `docs/SESSION_DUMP.md`
-- Historical notes archived under: `docs/archive/2026-02-26/`
+## Pending 2: Numeric/display fidelity policy
+
+Question:
+
+Should output preserve logical value (`str(value)`) or preserve Excel displayed text/format?
+
+Options:
+
+1. Keep logical value standardization.
+2. Preserve display-format text.
+
+Suggested acceptance cases:
+
+1. `0`, `1`, `1.0`, `00123`
+2. Date-formatted and percentage-formatted cells.
+
+## Related References
+
+1. IO semantics detail: `docs/IO_FORMAT_REQUIREMENTS.md`
+2. Current runtime snapshot: `docs/SESSION_DUMP.md`
+3. Stable architecture principles: `docs/ARCHITECTURE.md`

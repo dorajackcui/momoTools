@@ -21,6 +21,16 @@ def main() -> None:
         default="tests/golden/manifest.sample.json",
         help="Manifest used by golden regression when --with-golden is enabled.",
     )
+    parser.add_argument(
+        "--with-perf",
+        action="store_true",
+        help="Also run lightweight performance baseline and emit report files.",
+    )
+    parser.add_argument(
+        "--perf-baseline-json",
+        default="",
+        help="Optional previous perf JSON report path for delta comparison.",
+    )
     args = parser.parse_args()
 
     root = Path(__file__).resolve().parents[1]
@@ -43,6 +53,12 @@ def main() -> None:
             [py, "scripts/run_golden_regression.py", "--manifest", args.golden_manifest],
             cwd=root,
         )
+
+    if args.with_perf:
+        perf_command = [py, "scripts/run_perf_baseline.py"]
+        if args.perf_baseline_json:
+            perf_command.extend(["--baseline-json", args.perf_baseline_json])
+        run_step("perf", perf_command, cwd=root)
 
     print("[OK] Regression suite finished.")
 

@@ -1,152 +1,130 @@
 # Session Context Dump
 
-Snapshot date: 2026-02-28
-Audience: new AI/dev session handoff
-Scope: current working behavior (not historical design intent)
+Last updated: 2026-02-28
+Audience: new agent/dev session handoff
+Purpose: capture current runtime behavior and operational entrypoints
+Out of scope: long-term design principles (see docs/ARCHITECTURE.md)
 
-## 1) What this project is
+## 1) Project Snapshot
 
 TM_builder is a desktop Tkinter toolset for Excel localization workflows:
 
-- Master -> target sheets (single-column or multi-column update)
-- target sheets -> Master (reverse fill)
-- utility actions (column clear/insert/delete, compatibility save, deep replace)
-- untranslated stats export
-- terminology extractor (rules-driven extraction and terminology asset export)
+1. Master -> target (single-column and multi-column updates)
+2. target -> Master reverse fill
+3. Utility tools (column clear/insert/delete, compatibility save, deep replace)
+4. Untranslated stats export
+5. Terminology extraction (rule-driven)
 
-## 2) Runtime constraints
+## 2) Runtime Constraints
 
-- Platform: Windows
-- Python: standard local env
-- Excel COM dependency exists for:
-  - `core/excel_cleaner.py`
-  - `core/excel_compatibility_processor.py`
-  - post-process steps in `core/excel_processor.py` and `core/multi_column_processor.py`
-- If COM is unavailable, COM-related features fail while pure openpyxl paths still work.
+1. Platform: Windows desktop runtime.
+2. Excel COM dependency required for:
+- `core/excel_cleaner.py`
+- `core/excel_compatibility_processor.py`
+- post-process step in `core/excel_processor.py` and `core/multi_column_processor.py` when enabled
+3. Pure openpyxl flows still run without COM features.
 
-## 3) Current UI map (actual tabs)
+## 3) Current UI Map
 
 Defined in `app.py`:
 
-- Top-level tab `Main Tools`
-  - `Master->Target` (UpdaterController; single/multi auto split by column count)
-  - `Target->Master` (ReverseUpdaterController)
-- Top-level tab `Utilities`
-  - `Column Clear` (ClearerController)
-  - `Compatibility` (CompatibilityController)
-  - `Deep Replace` (DeepReplaceController)
-  - `Untranslated Stats` (UntranslatedStatsController)
-  - `Term Extractor` (TerminologyExtractorController)
+1. Top-level group: `Main Tools`
+- `Master->Target` (`UpdaterController`, auto routes single/multi by column count)
+- `Target->Master` (`ReverseUpdaterController`)
 
-## 4) Current behavior highlights
+2. Top-level group: `Utilities`
+- `Column Clear`
+- `Compatibility`
+- `Deep Replace`
+- `Untranslated Stats`
+- `Term Extractor`
 
-### 4.1 Fill mode and post-process
+## 4) Current Execution Model
 
-- Fill behavior:
-  - overwrite (default)
-  - fill blank only (`fill_blank_only=True`)
-- Blank check source of truth: `core/kernel/excel_io.py:is_blank_value`
-- Post-process toggle:
-  - available in Master->target (single/multi)
-  - default enabled
-  - when disabled, only skips COM save step
-- Post-process implementation detail:
-  - single/multi now share `core/pipeline/post_process.py`
-  - user-visible behavior is unchanged
+1. Controllers run actions through `TaskRunner` abstraction.
+2. Production mode uses `TkSingleTaskRunner`:
+- worker thread runs processor action
+- UI callbacks return via `root.after(...)`
+3. Single-task global lock is enabled:
+- when one processing action is running, all processing buttons are disabled
+- concurrent starts show `TASK_ALREADY_RUNNING`
+4. No cancellation support in current scope.
 
-### 4.2 Deterministic reverse merge
+## 5) Current UI Feedback Model
 
-- Reverse mode file merge order is deterministic:
-  - target files are merged in sorted path order
-  - parallel execution collects results in input order
-- This is a stability/observability improvement, not a business-rule change.
+1. Status bar state:
+- `Running: <task>`
+- `Done: <task>`
+- `Failed: <task>`
+2. Log visualization:
+- `View Logs` opens `LogWindow`
+- app log bus uses queue + periodic drain
+- log buffer is in-memory session scope (bounded, non-persistent)
+3. Existing success/failure dialogs remain unchanged.
 
-### 4.3 Untranslated stats export
+## 6) Core Behavior Highlights
 
-- In `UntranslatedStatsController`:
-  - selecting target folder auto-generates output path
-  - auto output location = parent folder of selected small-sheet folder
-  - manual output selection is still supported as optional override
-  - if folder changes later, output path resets to new auto path
+1. Fill mode remains:
+- overwrite
+- fill blank only (`is_blank_value` in `core/kernel/excel_io.py`)
+2. Reverse merge precedence is deterministic (sorted input order + ordered merge).
+3. Post-process in single/multi remains configurable and defaults enabled.
+4. Business decision rules are unchanged under refactor tracks.
 
-### 4.4 Terminology extractor MVP
+## 7) Terminology Extractor Snapshot
 
-- Input:
-  - input folder
-  - rule config JSON
-  - output xlsx path
-  - last selected rule config JSON path is persisted and auto-restored on next app launch
-- Pipeline:
-  - extraction (`record_rule`, `tag_span`)
-  - normalization + dedup
-  - relation build (`cross_file`, `affix_group`)
-  - review list generation
-- `record_rule` uses key condition:
-  - `key` filter supports contains (default) or regex mode via `key_regex` (case-insensitive)
-- version filtering is global via top-level `versions`:
-  - row must match configured versions before any extractor runs
-  - missing/`*` means no version filter
-- `tag_span` supports multiple opening tags via `open_tag` (string/list/comma-string)
-  or `open_tags` (list/string).
-- `compound_split` in extractor config is ignored at runtime.
-- `affix_delimiters` controls raw-term affix splitting in relation build
-  (default `["·", ":"]`).
-- `cross_file` rows are emitted only for terms appearing in at least 2 files.
-- `compound_delimiters` is removed and rejected by config loader.
-- `affix_group` relation is built from raw-term splits and does not require
-  split parts to exist as standalone terms.
-- `affix_group` checks are independent from `cross_file` filtering.
-- File scan:
-  - recursive `.xlsx/.xls`
-  - ignores `~$` temp files
-  - active sheet only
-  - `files` config is optional; missing/`*` means process all discovered files
-  - `versions` config is optional; missing/`*` means process all version rows
-- Output workbook sheets:
-  - `terms_summary`
-  - `relations_summary`
-  - `review`
-  - `details`
+1. Inputs: input folder, rule config JSON, output xlsx.
+2. Rule config path is persisted and restored.
+3. Pipeline includes extraction, normalization/dedup, relation build, review generation.
+4. Global `versions` filter applies before extractor execution.
+5. Output sheets: `terms_summary`, `relations_summary`, `review`, `details`.
 
-## 5) Source entrypoints you usually need
+## 8) Performance Baseline Snapshot
 
-- App wiring: `app.py`
-- UI orchestration:
-  - `controller_modules/*` (primary controller implementations)
-  - `controllers.py` (compatibility facade)
-- Processor logic:
-  - `core/excel_processor.py`
-  - `core/multi_column_processor.py`
-  - `core/reverse_excel_processor.py`
-  - `core/untranslated_stats_processor.py`
-  - `core/terminology/processor.py`
-  - `core/deep_replace_processor.py`
-  - `core/excel_cleaner.py`
-  - `core/excel_compatibility_processor.py`
-- Shared kernel: `core/kernel/*`
+1. Script: `scripts/run_perf_baseline.py`
+2. Scope: `master_to_target_single`, `master_to_target_multi`, `target_to_master_reverse`
+3. Default repeats: 3 iterations per case
+4. Output: markdown + json report in `tests/perf/reports`
+5. `--baseline-json` comparison is report-only (non-blocking)
 
-## 6) Test entrypoints
+## 9) Entry Commands
 
-- Unified regression entry:
-  - `python scripts/run_regression_suite.py --with-golden`
-- Syntax smoke:
-  - `python -m py_compile app.py controllers.py ui_components.py`
-- Full unit tests:
-  - `python -m unittest discover -s tests -p "test_*.py"`
-- Golden sample:
-  - `python scripts/run_golden_regression.py --manifest tests/golden/manifest.sample.json`
+Syntax smoke:
 
-## 7) Known unresolved items (business/policy)
+```bash
+python -m py_compile app.py controllers.py ui_components.py
+```
 
-See `docs/memo_pending_translation_rules.md`:
+Unit tests:
 
-- rule for matched rows when source/translation text is empty-string
-- numeric/display fidelity policy (`str(value)` vs Excel displayed text)
+```bash
+python -m unittest discover -s tests -p "test_*.py"
+```
 
-## 8) Fast start checklist for next session
+Unified regression:
 
-1. Read this file (`docs/SESSION_DUMP.md`) first.
-2. Read pending decisions (`docs/memo_pending_translation_rules.md`).
-3. Confirm no local regression: run UI tests.
-4. If touching IO logic, cross-check `IO_FORMAT_REQUIREMENTS.md`.
-5. If behavior changes, update this dump before ending session.
+```bash
+python scripts/run_regression_suite.py --with-golden
+```
+
+Optional perf with regression:
+
+```bash
+python scripts/run_regression_suite.py --with-golden --with-perf
+```
+
+## 10) Pending Business Decisions
+
+Pending policy items are tracked in:
+
+- `docs/memo_pending_translation_rules.md`
+
+Do not place architecture notes there.
+
+## 11) Fast Start Checklist
+
+1. Read `docs/ARCHITECTURE.md`.
+2. Read this snapshot (`docs/SESSION_DUMP.md`).
+3. Run syntax + unittest baseline commands.
+4. If touching IO semantics, verify `docs/IO_FORMAT_REQUIREMENTS.md`.
+5. If behavior changes, update this file in the same change set.

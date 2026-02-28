@@ -1,95 +1,121 @@
-# Troubleshooting Guide (Current)
+# Troubleshooting Guide
 
-Last updated: 2026-02-26
+Last updated: 2026-02-28
+Audience: operators, QA, and agents diagnosing runtime issues
+Purpose: provide quick diagnosis paths and actionable checks
+Out of scope: architecture rationale and business policy decisions
 
-## 1) Empty folder or no Excel files
-
-Symptom:
-- task finishes with 0 updates, or shows no files found.
-
-Check:
-- selected folder actually contains `.xlsx`/`.xls`.
-- temporary files (`~$`) are ignored in some flows.
-
-Note:
-- thread-pool crash on empty list was fixed in kernel helpers.
-
-## 2) File lock or save failure
-
-Symptom:
-- write-back fails, workbook cannot be opened, or output not saved.
-
-Check:
-- file is open in Excel or locked by another process/user.
-- file permissions are read-only.
-
-Action:
-- close all related Excel windows/processes.
-- rerun and inspect log lines with `[E_*]` codes and `file=...`.
-
-## 3) COM-related failures (Windows + Office dependency)
-
-Affected functions:
-- `ExcelColumnClearer`
-- `ExcelCompatibilityProcessor`
-- post-process steps in Master->small single/multi processors
-
-Check:
-- Microsoft Excel installed locally.
-- Office COM registration available.
-
-Action:
-- run with a minimal sample workbook first.
-- if COM path is not required, disable post-process toggle where available.
-
-## 4) Wrong columns / no matched updates
-
-Symptom:
-- process runs but updates are unexpectedly low or zero.
-
-Check:
-- key/match/update column indices are configured correctly (UI is 1-based input, processor uses 0-based internally after conversion).
-- selected sheet assumptions (`active` sheet only).
-- key/match values contain empty cells or unexpected whitespace.
-
-Reference:
-- `IO_FORMAT_REQUIREMENTS.md` for detailed per-mode column defaults.
-
-## 5) Untranslated stats output path confusion
-
-Current behavior:
-- selecting stats target folder auto-generates output file in the parent folder.
-- default name is `未翻译统计.xlsx`; conflicts auto-increment to `未翻译统计 (n).xlsx`.
-- manual output path remains optional override.
-- changing target folder resets output path to new auto path.
-
-If user cannot find output:
-- check the parent directory of the selected small-sheet folder first.
-
-## 6) Regression check quick commands
-
-- `python -m py_compile app.py controllers.py ui_components.py`
-- `python -m unittest discover -s tests -p "test_ui_*.py"`
-- optional: `python scripts/run_golden_regression.py`
-
-## 7) Encoding / mojibake guardrails
+## 1) No files processed or unexpected zero updates
 
 Symptoms:
-- Chinese text looks garbled in terminal output (for example `涓枃`).
-- JSON parse fails with BOM-related errors.
+
+1. Task completes with 0 updates.
+2. Logs show no matched rows.
 
 Checks:
-- run repository encoding check: `python scripts/check_text_encoding.py`
-- on Windows PowerShell 5.1, prefer `Get-Content -Encoding UTF8 <file>`
+
+1. Selected folder contains `.xlsx`/`.xls` files.
+2. Column mapping is correct (UI input is 1-based, processors use 0-based internally).
+3. Expected sheet is active sheet (current processors use active sheet assumptions).
+
+## 2) File lock or save failures
+
+Symptoms:
+
+1. Workbook save fails.
+2. File appears in error logs with `E_*` event code.
+
+Checks:
+
+1. File is not open in Excel by another user/process.
+2. File permissions are writable.
+
+Actions:
+
+1. Close related Excel windows/processes.
+2. Re-run and inspect log window entries for file path + error code.
+
+## 3) COM-related failures
+
+Affected paths:
+
+1. `ExcelColumnClearer`
+2. `ExcelCompatibilityProcessor`
+3. Post-process in Master->target single/multi when enabled
+
+Checks:
+
+1. Microsoft Excel is installed locally.
+2. COM registration works in current Windows user environment.
+
+Workaround:
+
+1. Disable post-process where toggle exists if COM step is not required.
+
+## 4) `TASK_ALREADY_RUNNING` warning
+
+Behavior:
+
+1. App enforces single-task lock for processing actions.
+2. Starting another processing task while one is running shows warning and does not launch second task.
+
+Expected resolution:
+
+1. Wait for current task to finish (`Done` or `Failed` in status bar), then retry.
+
+## 5) Log window opens but appears empty
+
+Checks:
+
+1. A processing task was actually started.
+2. `View Logs` window is not cleared manually.
+3. Logs may appear shortly after start due to queue drain cycle.
 
 Notes:
-- project text files are expected to be UTF-8 without BOM.
-- terminal display issues can be separate from file-content corruption.
 
-## 8) Terminology rule path auto-restore
+1. Log storage is session-only in memory.
+2. Closing app clears log history by design.
 
-Current behavior:
-- Terminology tab remembers last selected rule JSON path and restores it on next launch.
+## 6) Perf report interpretation (`--with-perf`)
 
-If the restored path is outdated:
-- reselect a valid rule JSON once; the new path will overwrite persisted state.
+Behavior:
+
+1. Perf baseline is report-only in current phase.
+2. `regressed` means slower than reference baseline JSON, but does not fail the suite.
+
+Checks:
+
+1. Compare multiple local runs to account for machine variance.
+2. Treat large consistent deltas as investigation candidates.
+
+## 7) Quick command set
+
+Syntax smoke:
+
+```bash
+python -m py_compile app.py controllers.py ui_components.py
+```
+
+Full unit tests:
+
+```bash
+python -m unittest discover -s tests -p "test_*.py"
+```
+
+Unified regression:
+
+```bash
+python scripts/run_regression_suite.py --with-golden
+```
+
+Unified regression + perf report:
+
+```bash
+python scripts/run_regression_suite.py --with-golden --with-perf
+```
+
+Encoding guardrail for docs:
+
+```bash
+python scripts/check_text_encoding.py --root docs
+```
