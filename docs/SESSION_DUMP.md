@@ -31,6 +31,7 @@ Defined in `app.py`:
 1. Top-level group: `Main Tools`
 - `Master->Target` (`UpdaterController`, auto routes single/multi by column count)
 - `Target->Master` (`ReverseUpdaterController`)
+- `Batch` (`BatchController`, supports batch orchestration for single/reverse modes)
 
 2. Top-level group: `Utilities`
 - `Column Clear`
@@ -49,6 +50,7 @@ Defined in `app.py`:
 - when one processing action is running, all processing buttons are disabled
 - concurrent starts show `TASK_ALREADY_RUNNING`
 4. No cancellation support in current scope.
+5. Batch execution still follows single-task global lock (`TkSingleTaskRunner`).
 
 ## 5) Current UI Feedback Model
 

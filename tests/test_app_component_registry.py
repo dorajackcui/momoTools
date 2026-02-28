@@ -22,6 +22,17 @@ class RecordingReverseController(RecordingController):
     instances = []
 
 
+class RecordingBatchController(RecordingController):
+    instances = []
+
+    def __init__(self, frame, *args, **kwargs):
+        super().__init__(frame, *args, **kwargs)
+        self.restore_calls = []
+
+    def restore_persisted_paths(self):
+        self.restore_calls.append(self.frame is not None)
+
+
 class RecordingClearerController(RecordingController):
     instances = []
 
@@ -66,6 +77,10 @@ class RecordingReverseFrame(RecordingFrame):
     instances = []
 
 
+class RecordingBatchFrame(RecordingFrame):
+    instances = []
+
+
 class RecordingClearerFrame(RecordingFrame):
     instances = []
 
@@ -91,6 +106,7 @@ class AppComponentRegistryTestCase(unittest.TestCase):
         for cls in [
             RecordingUpdaterController,
             RecordingReverseController,
+            RecordingBatchController,
             RecordingClearerController,
             RecordingCompatibilityController,
             RecordingDeepReplaceController,
@@ -98,6 +114,7 @@ class AppComponentRegistryTestCase(unittest.TestCase):
             RecordingTerminologyController,
             RecordingUpdaterFrame,
             RecordingReverseFrame,
+            RecordingBatchFrame,
             RecordingClearerFrame,
             RecordingCompatibilityFrame,
             RecordingDeepReplaceFrame,
@@ -128,6 +145,8 @@ class AppComponentRegistryTestCase(unittest.TestCase):
             "app.ttk.Notebook", side_effect=[main_notebook, utilities_notebook]
         ), patch("app.UpdaterController", RecordingUpdaterController), patch(
             "app.ReverseUpdaterController", RecordingReverseController
+        ), patch("app.BatchController", RecordingBatchController), patch(
+            "app.BatchFrame", RecordingBatchFrame
         ), patch("app.ClearerController", RecordingClearerController), patch(
             "app.CompatibilityController", RecordingCompatibilityController
         ), patch("app.DeepReplaceController", RecordingDeepReplaceController), patch(
@@ -149,7 +168,7 @@ class AppComponentRegistryTestCase(unittest.TestCase):
         )
         self.assertEqual(
             [call.kwargs["text"] for call in main_notebook.add.call_args_list],
-            ["Master->Target", "Target->Master"],
+            ["Master->Target", "Target->Master", "Batch"],
         )
         self.assertEqual(
             [call.kwargs["text"] for call in utilities_notebook.add.call_args_list],
@@ -168,6 +187,10 @@ class AppComponentRegistryTestCase(unittest.TestCase):
             RecordingReverseController.instances[0].kwargs["task_runner"],
             instance.task_runner,
         )
+        self.assertEqual(len(RecordingBatchController.instances), 1)
+        batch_controller = RecordingBatchController.instances[0]
+        self.assertIs(batch_controller.kwargs["task_runner"], instance.task_runner)
+        self.assertEqual(batch_controller.restore_calls, [True])
         self.assertEqual(len(RecordingClearerController.instances), 1)
         self.assertIs(
             RecordingClearerController.instances[0].kwargs["task_runner"],

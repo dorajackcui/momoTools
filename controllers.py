@@ -1,6 +1,7 @@
 from tkinter import filedialog
 
 from controller_modules import (
+    BatchController,
     BaseController,
     ClearerController,
     CompatibilityController,
@@ -15,6 +16,7 @@ from controller_modules import (
 
 __all__ = [
     "filedialog",
+    "BatchController",
     "BaseController",
     "TerminologyPathStateStore",
     "UpdaterController",

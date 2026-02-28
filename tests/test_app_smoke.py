@@ -79,13 +79,14 @@ class AppSmokeTestCase(unittest.TestCase):
 
         self.assertEqual(
             [spec.group for spec in specs],
-            ["main", "main", "utilities", "utilities", "utilities", "utilities", "utilities"],
+            ["main", "main", "main", "utilities", "utilities", "utilities", "utilities", "utilities"],
         )
         self.assertEqual(
             [spec.tab_text for spec in specs],
             [
                 "Master->Target",
                 "Target->Master",
+                "Batch",
                 "Column Clear",
                 "Compatibility",
                 "Deep Replace",

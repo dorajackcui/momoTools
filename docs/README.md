@@ -57,6 +57,7 @@ python scripts/run_regression_suite.py --with-perf --perf-baseline-json tests/pe
 
 1. `IO_FORMAT_REQUIREMENTS.md` moved from repo root to `docs/IO_FORMAT_REQUIREMENTS.md`.
 2. Core docs entry is now a 4-page model to reduce context fragmentation.
+3. `SESSION_DUMP.md` now includes `Batch` tab runtime snapshot under `Main Tools`.
 
 ## Maintenance Rules
 

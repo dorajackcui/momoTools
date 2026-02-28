@@ -8,6 +8,7 @@ from typing import Callable, Optional
 
 from ui import strings
 from controllers import (
+    BatchController,
     ClearerController,
     CompatibilityController,
     DeepReplaceController,
@@ -28,6 +29,7 @@ from controller_modules.task_runner import TkSingleTaskRunner
 from ui.theme import APP_BG, configure_ttk_style
 from ui.widgets.log_window import LogWindow
 from ui.views import (
+    BatchFrame,
     ClearerFrame,
     CompatibilityFrame,
     DeepReplaceFrame,
@@ -119,6 +121,18 @@ class ExcelUpdaterApp:
                     None, app.reverse_excel_processor, task_runner=app.task_runner
                 ),
                 frame_cls=ReverseUpdaterFrame,
+            ),
+            ToolSpec(
+                group="main",
+                tab_text="Batch",
+                controller_factory=lambda app: BatchController(
+                    None,
+                    app.excel_processor,
+                    app.reverse_excel_processor,
+                    task_runner=app.task_runner,
+                ),
+                frame_cls=BatchFrame,
+                after_mount=lambda controller: controller.restore_persisted_paths(),
             ),
             ToolSpec(
                 group="utilities",

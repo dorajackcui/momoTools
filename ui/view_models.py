@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from typing import Literal
 
 
 @dataclass(frozen=True)
@@ -48,3 +49,56 @@ class StatsConfig:
 @dataclass(frozen=True)
 class ClearerConfig:
     column_number: int
+
+
+BatchMode = Literal["master_to_target_single", "target_to_master_reverse"]
+
+
+@dataclass(frozen=True)
+class BatchDefaultsSingle:
+    target_key_col: int
+    target_match_col: int
+    target_update_start_col: int
+    master_key_col: int
+    master_match_col: int
+    fill_blank_only: bool
+    post_process_enabled: bool
+
+
+@dataclass(frozen=True)
+class BatchDefaultsReverse:
+    target_key_col: int
+    target_match_col: int
+    target_content_col: int
+    master_key_col: int
+    master_match_col: int
+    fill_blank_only: bool
+
+
+@dataclass(frozen=True)
+class BatchJobRow:
+    name: str
+    target_folder: str
+    variable_column: int
+
+
+@dataclass(frozen=True)
+class BatchAutoFillRule:
+    keyword: str
+    variable_column: int
+
+
+@dataclass(frozen=True)
+class BatchRuntimeOptions:
+    continue_on_error: bool
+
+
+@dataclass(frozen=True)
+class BatchViewConfig:
+    mode: BatchMode
+    master_file: str
+    config_path: str
+    defaults_single: BatchDefaultsSingle
+    defaults_reverse: BatchDefaultsReverse
+    jobs: tuple[BatchJobRow, ...]
+    runtime: BatchRuntimeOptions

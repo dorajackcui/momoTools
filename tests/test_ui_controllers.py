@@ -1,12 +1,35 @@
+import json
 import os
 import tempfile
 import unittest
 from unittest.mock import patch
 
-from controllers import ClearerController, ReverseUpdaterController, UntranslatedStatsController, UpdaterController
+from controllers import BatchController, ClearerController, ReverseUpdaterController, UntranslatedStatsController, UpdaterController
+from core.batch_config import (
+    BatchConfigV1,
+    BatchDefaultsSingle,
+    BatchJobConfig,
+    BatchRuntimeOptions,
+    MODE_MASTER_TO_TARGET_SINGLE,
+    dump_config,
+    load_config,
+    template_config,
+)
+from core.auto_fill_config import AutoFillConfig, AutoFillRule, load_auto_fill_config, save_auto_fill_config
+from core.batch_runner import BatchJobResult, BatchRunSummary
 from ui import strings
 from ui.validators import ValidationError
-from ui.view_models import ClearerConfig, ReverseConfig, StatsConfig, UpdaterConfig
+from ui.view_models import (
+    BatchDefaultsReverse,
+    BatchDefaultsSingle as BatchDefaultsSingleView,
+    BatchJobRow,
+    BatchRuntimeOptions as BatchRuntimeOptionsView,
+    BatchViewConfig,
+    ClearerConfig,
+    ReverseConfig,
+    StatsConfig,
+    UpdaterConfig,
+)
 
 
 class FakeDialogs:
@@ -238,6 +261,98 @@ class FakeStatsProcessor:
         return True
 
 
+class FakeBatchFrame:
+    def __init__(self, config, mode=MODE_MASTER_TO_TARGET_SINGLE):
+        self._config = config
+        self._mode = mode
+        self.master_file = ""
+        self.config_file = ""
+        self.config_loaded = None
+        self.job_folder_updates = []
+        self.auto_folder_updates = []
+        self.auto_fill_config_path = ""
+
+    def set_master_file_label(self, path):
+        self.master_file = path
+
+    def set_config_file_label(self, path):
+        self.config_file = path
+
+    def get_config(self):
+        if isinstance(self._config, Exception):
+            raise self._config
+        return self._config
+
+    def get_config_path(self):
+        return self.config_file
+
+    def load_config(self, config):
+        self.config_loaded = config
+        self.master_file = config.master_file
+
+    def get_mode(self):
+        return self._mode
+
+    def set_job_target_folder(self, index, folder):
+        self.job_folder_updates.append((index, folder))
+
+    def replace_jobs_from_auto_fill(self, folders):
+        self.auto_folder_updates = list(folders)
+
+    def set_auto_fill_config_path(self, path):
+        self.auto_fill_config_path = path
+
+
+class FakeBatchRunner:
+    def __init__(self, precheck_errors=None, summary=None):
+        self.precheck_errors = list(precheck_errors or [])
+        self.summary = summary or BatchRunSummary(
+            mode=MODE_MASTER_TO_TARGET_SINGLE,
+            jobs_total=1,
+            jobs_succeeded=1,
+            jobs_failed=0,
+            updated_total=3,
+            results=(
+                BatchJobResult(
+                    job_index=1,
+                    job_name="job-1",
+                    status="success",
+                    updated_count=3,
+                    error="",
+                    elapsed_ms=5,
+                ),
+            ),
+            stopped_early=False,
+            backup_path="",
+        )
+        self.precheck_calls = []
+        self.run_calls = []
+
+    def precheck(self, config):
+        self.precheck_calls.append(config)
+        return list(self.precheck_errors)
+
+    def run(self, config):
+        self.run_calls.append(config)
+        return self.summary
+
+
+class FakeStateStore:
+    def __init__(self, initial_state=None):
+        self.state = dict(initial_state or {})
+
+    def load(self):
+        return dict(self.state)
+
+    def save(self, state):
+        self.state = dict(state)
+
+
+class FakeNoopProcessor:
+    def __init__(self):
+        self.log_callback = None
+
+
 class ControllersTestCase(unittest.TestCase):
     def test_updater_controller_single_path_success(self):
         config = UpdaterConfig(0, 1, 2, 1, 2, 3, 1, True, False)
@@ -453,6 +568,324 @@ class ControllersTestCase(unittest.TestCase):
         self.assertEqual(frame.selected_master, "C:/tmp/master.xlsx")
         self.assertEqual(single.master_file, "C:/tmp/master.xlsx")
         self.assertEqual(multi.master_file, "C:/tmp/master.xlsx")
+
+    def _build_batch_view_config(self):
+        return BatchViewConfig(
+            mode=MODE_MASTER_TO_TARGET_SINGLE,
+            master_file="C:/tmp/master.xlsx",
+            config_path="",
+            defaults_single=BatchDefaultsSingleView(
+                target_key_col=1,
+                target_match_col=2,
+                target_update_start_col=3,
+                master_key_col=2,
+                master_match_col=3,
+                fill_blank_only=False,
+                post_process_enabled=True,
+            ),
+            defaults_reverse=BatchDefaultsReverse(
+                target_key_col=1,
+                target_match_col=2,
+                target_content_col=3,
+                master_key_col=2,
+                master_match_col=3,
+                fill_blank_only=False,
+            ),
+            jobs=(
+                BatchJobRow(name="job-1", target_folder="C:/tmp/p1", variable_column=4),
+                BatchJobRow(name="job-2", target_folder="C:/tmp/p2", variable_column=5),
+            ),
+            runtime=BatchRuntimeOptionsView(continue_on_error=True),
+        )
+
+    def test_batch_controller_precheck_and_run_summary(self):
+        config = self._build_batch_view_config()
+        frame = FakeBatchFrame(config)
+        dialogs = FakeDialogs()
+        runner = FakeBatchRunner()
+        controller = BatchController(
+            frame,
+            FakeNoopProcessor(),
+            FakeNoopProcessor(),
+            dialog_service=dialogs,
+            state_store=FakeStateStore(),
+            runner=runner,
+        )
+
+        controller.precheck_batch()
+        controller.process_files()
+
+        self.assertEqual(len(runner.precheck_calls), 2)
+        self.assertEqual(len(runner.run_calls), 1)
+        self.assertTrue(dialogs.infos)
+        self.assertIn("Batch finished", dialogs.infos[-1][1])
+
+    def test_batch_controller_precheck_fail_blocks_run(self):
+        config = self._build_batch_view_config()
+        frame = FakeBatchFrame(config)
+        dialogs = FakeDialogs()
+        runner = FakeBatchRunner(precheck_errors=["missing folder"])
+        controller = BatchController(
+            frame,
+            FakeNoopProcessor(),
+            FakeNoopProcessor(),
+            dialog_service=dialogs,
+            state_store=FakeStateStore(),
+            runner=runner,
+        )
+
+        controller.process_files()
+
+        self.assertEqual(len(runner.run_calls), 0)
+        self.assertTrue(dialogs.errors)
+        self.assertIn("Batch precheck failed", dialogs.errors[0][1])
+
+    def test_batch_controller_load_and_export_json(self):
+        frame = FakeBatchFrame(self._build_batch_view_config())
+        dialogs = FakeDialogs()
+        state_store = FakeStateStore()
+        controller = BatchController(
+            frame,
+            FakeNoopProcessor(),
+            FakeNoopProcessor(),
+            dialog_service=dialogs,
+            state_store=state_store,
+            runner=FakeBatchRunner(),
+        )
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            master_path = os.path.join(temp_dir, "master.xlsx")
+            with open(master_path, "w", encoding="utf-8") as handle:
+                handle.write("placeholder")
+
+            loaded_path = os.path.join(temp_dir, "batch.json")
+            loaded_config = BatchConfigV1(
+                schema_version=1,
+                mode=MODE_MASTER_TO_TARGET_SINGLE,
+                master_file=master_path,
+                defaults=BatchDefaultsSingle(
+                    target_key_col=1,
+                    target_match_col=2,
+                    target_update_start_col=3,
+                    master_key_col=2,
+                    master_match_col=3,
+                    fill_blank_only=False,
+                    post_process_enabled=True,
+                ),
+                jobs=(BatchJobConfig(name="job-1", target_folder=temp_dir, variable_column=4),),
+                runtime=BatchRuntimeOptions(continue_on_error=True),
+            )
+            dump_config(loaded_config, loaded_path)
+
+            frame.set_config_file_label(loaded_path)
+            controller.load_config_file()
+            self.assertIsNotNone(frame.config_loaded)
+            self.assertEqual(frame.master_file, master_path)
+
+            template_path = os.path.join(temp_dir, "template.json")
+            with patch("controller_modules.batch.filedialog.asksaveasfilename", return_value=template_path):
+                controller.export_template_file()
+            exported = load_config(template_path)
+            self.assertEqual(exported.mode, MODE_MASTER_TO_TARGET_SINGLE)
+
+    def test_batch_controller_restore_persisted_config_path(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            config_path = os.path.join(temp_dir, "persisted.json")
+            dump_config(template_config(MODE_MASTER_TO_TARGET_SINGLE), config_path)
+            auto_fill_path = os.path.join(temp_dir, "rules.json")
+            frame = FakeBatchFrame(self._build_batch_view_config())
+            store = FakeStateStore(
+                {
+                    "batch_config_path": config_path,
+                    "auto_fill_config_path": auto_fill_path,
+                }
+            )
+            controller = BatchController(
+                frame,
+                FakeNoopProcessor(),
+                FakeNoopProcessor(),
+                dialog_service=FakeDialogs(),
+                state_store=store,
+                runner=FakeBatchRunner(),
+            )
+
+            controller.restore_persisted_paths()
+
+        self.assertEqual(frame.config_file, config_path)
+        self.assertEqual(frame.auto_fill_config_path, auto_fill_path)
+
+    def test_batch_controller_select_auto_fill_config_file_persists_path(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            selected = os.path.join(temp_dir, "my_rules.json")
+            frame = FakeBatchFrame(self._build_batch_view_config())
+            store = FakeStateStore()
+            controller = BatchController(
+                frame,
+                FakeNoopProcessor(),
+                FakeNoopProcessor(),
+                dialog_service=FakeDialogs(),
+                state_store=store,
+                runner=FakeBatchRunner(),
+            )
+            with patch("controller_modules.batch.filedialog.asksaveasfilename", return_value=selected):
+                controller.select_auto_fill_config_file()
+
+        self.assertEqual(controller.auto_fill_config_path, selected)
+        self.assertEqual(frame.auto_fill_config_path, selected)
+        self.assertEqual(store.state.get("auto_fill_config_path"), selected)
+
+    def test_batch_controller_auto_fill_jobs_from_mapping_one_level(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            auto_fill_path = os.path.join(temp_dir, "auto_fill_rules.json")
+            frame = FakeBatchFrame(self._build_batch_view_config())
+            dialogs = FakeDialogs()
+            controller = BatchController(
+                frame,
+                FakeNoopProcessor(),
+                FakeNoopProcessor(),
+                dialog_service=dialogs,
+                state_store=FakeStateStore(),
+                runner=FakeBatchRunner(),
+                auto_fill_config_path=auto_fill_path,
+            )
+            fr_dir = os.path.join(temp_dir, "[fr]2.1.2")
+            de_dir = os.path.join(temp_dir, "[de]2.1.2")
+            nested_fr = os.path.join(fr_dir, "[fr]child")
+            os.makedirs(fr_dir)
+            os.makedirs(de_dir)
+            os.makedirs(nested_fr)
+            os.makedirs(os.path.join(temp_dir, "misc"))
+            save_auto_fill_config(
+                AutoFillConfig(
+                    rules=(
+                        AutoFillRule(keyword="[fr]", variable_column=6),
+                        AutoFillRule(keyword="[de]", variable_column=7),
+                    )
+                ),
+                auto_fill_path,
+            )
+            with patch("controllers.filedialog.askdirectory", return_value=temp_dir):
+                controller.auto_fill_jobs_from_mapping()
+
+        self.assertEqual(
+            frame.auto_folder_updates,
+            [
+                {"target_folder": fr_dir, "variable_column": 6},
+                {"target_folder": de_dir, "variable_column": 7},
+            ],
+        )
+        self.assertTrue(dialogs.infos)
+        self.assertFalse(dialogs.errors)
+
+    def test_batch_controller_auto_fill_jobs_from_mapping_no_match(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            auto_fill_path = os.path.join(temp_dir, "auto_fill_rules.json")
+            frame = FakeBatchFrame(self._build_batch_view_config())
+            dialogs = FakeDialogs()
+            controller = BatchController(
+                frame,
+                FakeNoopProcessor(),
+                FakeNoopProcessor(),
+                dialog_service=dialogs,
+                state_store=FakeStateStore(),
+                runner=FakeBatchRunner(),
+                auto_fill_config_path=auto_fill_path,
+            )
+            os.makedirs(os.path.join(temp_dir, "[jp]2.1.2"))
+            save_auto_fill_config(
+                AutoFillConfig(
+                    rules=(
+                        AutoFillRule(keyword="[fr]", variable_column=6),
+                        AutoFillRule(keyword="[de]", variable_column=7),
+                    )
+                ),
+                auto_fill_path,
+            )
+            with patch("controllers.filedialog.askdirectory", return_value=temp_dir):
+                controller.auto_fill_jobs_from_mapping()
+
+        self.assertFalse(frame.auto_folder_updates)
+        self.assertTrue(dialogs.warnings)
+
+    def test_batch_controller_open_auto_fill_config_file_creates_default(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            auto_fill_path = os.path.join(temp_dir, "auto_fill_rules.json")
+            frame = FakeBatchFrame(self._build_batch_view_config())
+            dialogs = FakeDialogs()
+            controller = BatchController(
+                frame,
+                FakeNoopProcessor(),
+                FakeNoopProcessor(),
+                dialog_service=dialogs,
+                state_store=FakeStateStore(),
+                runner=FakeBatchRunner(),
+                auto_fill_config_path=auto_fill_path,
+            )
+            with patch("controller_modules.batch.os.startfile", create=True):
+                controller.open_auto_fill_config_file()
+            loaded = load_auto_fill_config(auto_fill_path)
+
+        self.assertEqual(len(loaded.rules), 0)
+        self.assertFalse(dialogs.errors)
+
+    def test_batch_controller_load_old_json_migrates_legacy_auto_fill(self):
+        frame = FakeBatchFrame(self._build_batch_view_config())
+        dialogs = FakeDialogs()
+        state_store = FakeStateStore()
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            auto_fill_path = os.path.join(temp_dir, "auto_fill_rules.json")
+            master_path = os.path.join(temp_dir, "master.xlsx")
+            with open(master_path, "w", encoding="utf-8") as handle:
+                handle.write("placeholder")
+
+            old_json_path = os.path.join(temp_dir, "legacy_batch.json")
+            legacy_payload = {
+                "schema_version": 1,
+                "mode": MODE_MASTER_TO_TARGET_SINGLE,
+                "master_file": master_path,
+                "defaults": {
+                    "target_key_col": 1,
+                    "target_match_col": 2,
+                    "target_update_start_col": 3,
+                    "master_key_col": 2,
+                    "master_match_col": 3,
+                    "fill_blank_only": False,
+                    "post_process_enabled": True,
+                },
+                "jobs": [
+                    {
+                        "name": "job-1",
+                        "target_folder": temp_dir,
+                        "master_content_start_col": 4,
+                    }
+                ],
+                "runtime": {"continue_on_error": True},
+                "auto_fill": {
+                    "rules": [
+                        {"keyword": "[fr]", "variable_column": 6},
+                        {"keyword": "[de]", "variable_column": 7},
+                    ]
+                },
+            }
+            with open(old_json_path, "w", encoding="utf-8") as handle:
+                json.dump(legacy_payload, handle, ensure_ascii=False, indent=2)
+
+            controller = BatchController(
+                frame,
+                FakeNoopProcessor(),
+                FakeNoopProcessor(),
+                dialog_service=dialogs,
+                state_store=state_store,
+                runner=FakeBatchRunner(),
+                auto_fill_config_path=auto_fill_path,
+            )
+            frame.set_config_file_label(old_json_path)
+            controller.load_config_file()
+            loaded = load_auto_fill_config(auto_fill_path)
+
+        self.assertEqual(len(loaded.rules), 2)
+        self.assertEqual(frame.master_file, master_path)
 
 
 if __name__ == "__main__":

@@ -1,3 +1,4 @@
+from ui.views.batch import BatchFrame
 from ui.views.clearer import ClearerFrame
 from ui.views.compatibility import CompatibilityFrame
 from ui.views.deep_replace import DeepReplaceFrame
@@ -9,6 +10,7 @@ from ui.views.updater import UpdaterFrame
 
 __all__ = [
     "UpdaterFrame",
+    "BatchFrame",
     "ClearerFrame",
     "CompatibilityFrame",
     "MultiColumnFrame",

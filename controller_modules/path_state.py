@@ -5,6 +5,8 @@ class TerminologyPathStateStore:
     """Persist terminology UI paths under user profile."""
 
     STATE_KEY_RULE_CONFIG_PATH = "terminology_rule_config_path"
+    STATE_KEY_BATCH_CONFIG_PATH = "batch_config_path"
+    STATE_KEY_AUTO_FILL_CONFIG_PATH = "auto_fill_config_path"
 
     def __init__(self, state_path=None):
         self.state_path = state_path or self._default_state_path()
@@ -13,6 +15,11 @@ class TerminologyPathStateStore:
     def _default_state_path():
         base_dir = os.environ.get("APPDATA") or os.path.expanduser("~")
         return os.path.join(base_dir, "TM_builder", "ui_state.json")
+
+    @staticmethod
+    def default_auto_fill_rules_path():
+        base_dir = os.environ.get("APPDATA") or os.path.expanduser("~")
+        return os.path.join(base_dir, "TM_builder", "auto_fill_rules.json")
 
     def load(self):
         if not os.path.exists(self.state_path):

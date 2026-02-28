@@ -1,4 +1,5 @@
 from .base import BaseController
+from .batch import BatchController
 from .path_state import TerminologyPathStateStore
 from .updater import UpdaterController
 from .clearer import ClearerController
@@ -11,6 +12,7 @@ from .terminology_extractor import TerminologyExtractorController
 
 __all__ = [
     "BaseController",
+    "BatchController",
     "TerminologyPathStateStore",
     "UpdaterController",
     "ClearerController",
