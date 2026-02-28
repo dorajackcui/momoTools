@@ -8,7 +8,7 @@ from .dedup import build_term_aggregates, build_terms_and_occurrences
 from .exporter import TerminologyExcelExporter
 from .extractors import BaseExtractor, ExtractContext, RecordRuleExtractor, TagSpanExtractor
 from .normalize import normalize_candidates
-from .relations import build_relation_summary, build_relations, build_review_items
+from .relations import build_relation_summary, build_review_items
 from .types import Candidate, CompoundSplitRule, RecordRule, TagSpanRule, TermEntry, TermSummaryRow
 
 
@@ -66,15 +66,6 @@ class TerminologyProcessor:
         normalized = normalize_candidates(all_candidates, config.normalization)
         terms, occurrences, _candidate_to_term_id, dedup_to_term_id, _term_text_to_term_id = build_terms_and_occurrences(normalized)
         term_by_id = {term.term_id: term for term in terms}
-        relations = build_relations(
-            terms=terms,
-            occurrences=occurrences,
-            thresholds=config.thresholds,
-            case_insensitive_dedup=config.normalization.case_insensitive_dedup,
-            dedup_to_term_id=dedup_to_term_id,
-            term_by_id=term_by_id,
-            compound_delimiters=config.compound_delimiters,
-        )
         review_items, reasons_by_term = build_review_items(
             terms=terms,
             occurrences=occurrences,
@@ -86,7 +77,12 @@ class TerminologyProcessor:
         relations_summary_rows = build_relation_summary(
             terms=terms,
             occurrences=occurrences,
-            relations=relations,
+            candidates=all_candidates,
+            normalization_settings=config.normalization,
+            dedup_to_term_id=dedup_to_term_id,
+            term_by_id=term_by_id,
+            affix_delimiters=config.affix_delimiters,
+            case_insensitive_dedup=config.normalization.case_insensitive_dedup,
         )
 
         self._exporter.export(

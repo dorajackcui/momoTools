@@ -44,21 +44,31 @@ class TerminologyExcelExporter:
         )
 
         relations_summary_columns = [
-            "relation_group",
-            "anchor_term",
-            "members_count",
-            "members_list",
+            "relation_type",
             "evidence_count",
+            "cross_term",
+            "cross_files_count",
+            "cross_files_list",
+            "affix_role",
+            "affix_anchor_term",
+            "affix_related_count",
+            "affix_related_list",
+            "affix_delimiters",
             "notes",
         ]
         relations_summary_df = pd.DataFrame(
             [
                 {
-                    "relation_group": row.relation_group,
-                    "anchor_term": row.anchor_term,
-                    "members_count": row.members_count,
-                    "members_list": row.members_list,
+                    "relation_type": row.relation_type,
                     "evidence_count": row.evidence_count,
+                    "cross_term": row.cross_term,
+                    "cross_files_count": row.cross_files_count,
+                    "cross_files_list": row.cross_files_list,
+                    "affix_role": row.affix_role,
+                    "affix_anchor_term": row.affix_anchor_term,
+                    "affix_related_count": row.affix_related_count,
+                    "affix_related_list": row.affix_related_list,
+                    "affix_delimiters": row.affix_delimiters,
                     "notes": row.notes,
                 }
                 for row in relations_summary_rows

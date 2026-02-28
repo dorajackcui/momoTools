@@ -65,7 +65,7 @@ class TerminologyConfig:
     version: int
     files: tuple[str, ...]
     versions: tuple[str, ...]
-    compound_delimiters: tuple[str, ...]
+    affix_delimiters: tuple[str, ...]
     normalization: NormalizationSettings
     thresholds: ThresholdSettings
     extractors: tuple[ExtractorRule, ...]
@@ -152,9 +152,14 @@ class TermSummaryRow:
 
 @dataclass(frozen=True)
 class RelationSummaryRow:
-    relation_group: str
-    anchor_term: str
-    members_count: int
-    members_list: str
+    relation_type: str
     evidence_count: int
+    cross_term: str = ""
+    cross_files_count: int = 0
+    cross_files_list: str = ""
+    affix_role: str = ""
+    affix_anchor_term: str = ""
+    affix_related_count: int = 0
+    affix_related_list: str = ""
+    affix_delimiters: str = ""
     notes: str = ""

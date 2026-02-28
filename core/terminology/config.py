@@ -31,14 +31,18 @@ class ExtractorConfigLoader:
         version = int(raw.get("version", 0))
         if version != 1:
             raise ValueError("Config version must be 1")
+        if "compound_delimiters" in raw:
+            raise ValueError(
+                "compound_delimiters is no longer supported; use affix_delimiters instead"
+            )
 
         files = self._parse_file_filters(raw.get("files"))
         versions = self._parse_version_filters(raw.get("versions"))
-        compound_delimiters = self._parse_list_value(
-            raw.get("compound_delimiters"),
-            "compound_delimiters",
+        affix_delimiters = self._parse_list_value(
+            raw.get("affix_delimiters"),
+            "affix_delimiters",
             required=False,
-        ) or ("·",)
+        ) or ("\u00b7", ":")
         normalization = self._parse_normalization(raw.get("normalization") or {})
         thresholds = self._parse_thresholds(raw.get("thresholds") or {})
         extractors = self._parse_extractors(raw.get("extractors"))
@@ -47,7 +51,7 @@ class ExtractorConfigLoader:
             version=version,
             files=files,
             versions=versions,
-            compound_delimiters=compound_delimiters,
+            affix_delimiters=affix_delimiters,
             normalization=normalization,
             thresholds=thresholds,
             extractors=extractors,
@@ -200,7 +204,7 @@ class ExtractorConfigLoader:
     def _parse_compound_split_rule(self, raw_rule: dict[str, Any]) -> CompoundSplitRule:
         rule_id, enabled = self._parse_rule_identity(raw_rule, "compound_split")
         source_columns = self._parse_source_columns(raw_rule, rule_id, "compound_split")
-        delimiter = str(raw_rule.get("delimiter", "·"))
+        delimiter = str(raw_rule.get("delimiter", "\u00b7"))
         if not delimiter:
             raise ValueError(f"compound_split.delimiter is required (id={rule_id})")
 

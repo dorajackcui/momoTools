@@ -1,6 +1,6 @@
 # Session Context Dump
 
-Snapshot date: 2026-02-26
+Snapshot date: 2026-02-27
 Audience: new AI/dev session handoff
 Scope: current working behavior (not historical design intent)
 
@@ -69,7 +69,7 @@ Defined in `app.py`:
 - Pipeline:
   - extraction (`record_rule`, `tag_span`)
   - normalization + dedup
-  - relation build (`variant_of`, `has_head`, `has_suffix`, `head_suffix_pair`)
+  - relation build (`cross_file`, `affix_group`)
   - review list generation
 - `record_rule` uses key condition:
   - `key` filter supports contains (default) or regex mode via `key_regex` (case-insensitive)
@@ -79,8 +79,13 @@ Defined in `app.py`:
 - `tag_span` supports multiple opening tags via `open_tag` (string/list/comma-string)
   or `open_tags` (list/string).
 - `compound_split` in extractor config is ignored at runtime.
-- compound relations are generated in post-cleaning stage from deduplicated `terms`
-  using `compound_delimiters` (default `["·"]`).
+- `affix_delimiters` controls raw-term affix splitting in relation build
+  (default `["·", ":"]`).
+- `cross_file` rows are emitted only for terms appearing in at least 2 files.
+- `compound_delimiters` is removed and rejected by config loader.
+- `affix_group` relation is built from raw-term splits and does not require
+  split parts to exist as standalone terms.
+- `affix_group` checks are independent from `cross_file` filtering.
 - File scan:
   - recursive `.xlsx/.xls`
   - ignores `~$` temp files

@@ -1,100 +1,174 @@
 import re
+from collections import defaultdict
 
 from .dedup import build_term_aggregates
-from .normalize import build_dedup_key
-from .types import RelationSummaryRow, ReviewItem, TermEntry, TermOccurrence, TermRelation, ThresholdSettings
+from .normalize import build_dedup_key, normalize_term
+from .types import (
+    Candidate,
+    NormalizationSettings,
+    RelationSummaryRow,
+    ReviewItem,
+    TermEntry,
+    TermOccurrence,
+    ThresholdSettings,
+)
 
 
-def build_relations(
+def build_cross_file_rows(
     terms: list[TermEntry],
     occurrences: list[TermOccurrence],
-    thresholds: ThresholdSettings,
-    case_insensitive_dedup: bool,
-    dedup_to_term_id: dict[str, str],
-    term_by_id: dict[str, TermEntry],
-    compound_delimiters: tuple[str, ...] = ("·",),
-) -> list[TermRelation]:
-    relations: list[TermRelation] = []
-    relations.extend(_build_containment_relations(terms, thresholds.containment_min_len))
-    relations.extend(
-        _build_compound_relations_from_terms(
-            terms=terms,
-            case_insensitive_dedup=case_insensitive_dedup,
-            compound_delimiters=compound_delimiters,
-            term_by_id=term_by_id,
-        )
-    )
-    return relations
-
-
-def build_relation_summary(
-    terms: list[TermEntry],
-    occurrences: list[TermOccurrence],
-    relations: list[TermRelation],
 ) -> list[RelationSummaryRow]:
     rows: list[RelationSummaryRow] = []
     term_aggregates = build_term_aggregates(occurrences)
-
     for term in sorted(terms, key=lambda item: item.term_norm):
         aggregate = term_aggregates.get(term.term_id, {})
         files_count = int(aggregate.get("files_count", term.files_count))
+        if files_count < 2:
+            continue
         files_list = str(aggregate.get("files_list", ""))
         rows.append(
             RelationSummaryRow(
-                relation_group="file_presence",
-                anchor_term=term.term_norm,
-                members_count=files_count,
-                members_list=files_list,
+                relation_type="cross_file",
                 evidence_count=term.occurrences_count,
+                cross_term=term.term_norm,
+                cross_files_count=files_count,
+                cross_files_list=files_list,
                 notes="",
             )
         )
+    return rows
 
-    suffix_members: dict[str, set[str]] = {}
-    suffix_evidence: dict[str, int] = {}
-    prefix_members: dict[str, set[str]] = {}
-    prefix_evidence: dict[str, int] = {}
 
-    for relation in relations:
-        if relation.relation_type != "head_suffix_pair":
+def build_affix_group_rows(
+    candidates: list[Candidate],
+    normalization_settings: NormalizationSettings,
+    dedup_to_term_id: dict[str, str],
+    term_by_id: dict[str, TermEntry],
+    affix_delimiters: tuple[str, ...],
+    case_insensitive_dedup: bool,
+) -> list[RelationSummaryRow]:
+    delimiters = tuple(item for item in affix_delimiters if str(item).strip())
+    if not delimiters:
+        delimiters = ("\u00b7", ":")
+
+    pair_counts: dict[tuple[str, str], int] = defaultdict(int)
+    pair_delimiters: dict[tuple[str, str], set[str]] = defaultdict(set)
+    key_to_display: dict[str, str] = {}
+
+    for candidate in candidates:
+        split_result = _split_by_first_delimiter(candidate.term_raw, delimiters)
+        if split_result is None:
+            continue
+        prefix_raw, suffix_raw, delimiter = split_result
+
+        prefix_norm = normalize_term(prefix_raw, normalization_settings)
+        suffix_norm = normalize_term(suffix_raw, normalization_settings)
+        if not prefix_norm or not suffix_norm:
             continue
 
-        head = relation.source_term
-        suffix = relation.target_term
+        prefix_key = build_dedup_key(prefix_norm, case_insensitive_dedup)
+        suffix_key = build_dedup_key(suffix_norm, case_insensitive_dedup)
+        if prefix_key == suffix_key:
+            continue
 
-        suffix_members.setdefault(head, set()).add(suffix)
-        suffix_evidence[head] = suffix_evidence.get(head, 0) + relation.evidence_count
+        prefix_term_id = dedup_to_term_id.get(prefix_key)
+        suffix_term_id = dedup_to_term_id.get(suffix_key)
+        prefix_display = term_by_id[prefix_term_id].term_norm if prefix_term_id and prefix_term_id in term_by_id else prefix_norm
+        suffix_display = term_by_id[suffix_term_id].term_norm if suffix_term_id and suffix_term_id in term_by_id else suffix_norm
+        key_to_display.setdefault(prefix_key, prefix_display)
+        key_to_display.setdefault(suffix_key, suffix_display)
 
-        prefix_members.setdefault(suffix, set()).add(head)
-        prefix_evidence[suffix] = prefix_evidence.get(suffix, 0) + relation.evidence_count
+        pair_key = (prefix_key, suffix_key)
+        pair_counts[pair_key] += 1
+        pair_delimiters[pair_key].add(delimiter)
 
-    for anchor in sorted(suffix_members.keys()):
-        members = sorted(suffix_members[anchor])
+    prefix_related_counts: dict[str, dict[str, int]] = defaultdict(lambda: defaultdict(int))
+    prefix_delimiters: dict[str, set[str]] = defaultdict(set)
+    suffix_related_counts: dict[str, dict[str, int]] = defaultdict(lambda: defaultdict(int))
+    suffix_delimiters: dict[str, set[str]] = defaultdict(set)
+
+    for (prefix_key, suffix_key), count in pair_counts.items():
+        prefix_related_counts[prefix_key][suffix_key] += count
+        suffix_related_counts[suffix_key][prefix_key] += count
+
+        delimiters_for_pair = pair_delimiters.get((prefix_key, suffix_key), set())
+        prefix_delimiters[prefix_key].update(delimiters_for_pair)
+        suffix_delimiters[suffix_key].update(delimiters_for_pair)
+
+    rows: list[RelationSummaryRow] = []
+
+    for prefix_key in sorted(prefix_related_counts.keys(), key=lambda item: key_to_display.get(item, item)):
+        anchor_term = key_to_display.get(prefix_key, prefix_key)
+        related_keys = sorted(prefix_related_counts[prefix_key].keys(), key=lambda item: key_to_display.get(item, item))
+        related_terms = [key_to_display.get(item, item) for item in related_keys]
+        evidence_count = sum(prefix_related_counts[prefix_key].values())
         rows.append(
             RelationSummaryRow(
-                relation_group="suffix_family",
-                anchor_term=anchor,
-                members_count=len(members),
-                members_list=";".join(members),
-                evidence_count=suffix_evidence.get(anchor, 0),
+                relation_type="affix_group",
+                evidence_count=evidence_count,
+                affix_role="prefix_anchor",
+                affix_anchor_term=anchor_term,
+                affix_related_count=len(related_terms),
+                affix_related_list=";".join(related_terms),
+                affix_delimiters=";".join(sorted(prefix_delimiters.get(prefix_key, set()))),
                 notes="",
             )
         )
 
-    for anchor in sorted(prefix_members.keys()):
-        members = sorted(prefix_members[anchor])
+    for suffix_key in sorted(suffix_related_counts.keys(), key=lambda item: key_to_display.get(item, item)):
+        anchor_term = key_to_display.get(suffix_key, suffix_key)
+        related_keys = sorted(suffix_related_counts[suffix_key].keys(), key=lambda item: key_to_display.get(item, item))
+        related_terms = [key_to_display.get(item, item) for item in related_keys]
+        evidence_count = sum(suffix_related_counts[suffix_key].values())
         rows.append(
             RelationSummaryRow(
-                relation_group="prefix_family",
-                anchor_term=anchor,
-                members_count=len(members),
-                members_list=";".join(members),
-                evidence_count=prefix_evidence.get(anchor, 0),
+                relation_type="affix_group",
+                evidence_count=evidence_count,
+                affix_role="suffix_anchor",
+                affix_anchor_term=anchor_term,
+                affix_related_count=len(related_terms),
+                affix_related_list=";".join(related_terms),
+                affix_delimiters=";".join(sorted(suffix_delimiters.get(suffix_key, set()))),
                 notes="",
             )
         )
 
     return rows
+
+
+def build_relation_summary(
+    terms: list[TermEntry],
+    occurrences: list[TermOccurrence],
+    candidates: list[Candidate],
+    normalization_settings: NormalizationSettings,
+    dedup_to_term_id: dict[str, str],
+    term_by_id: dict[str, TermEntry],
+    affix_delimiters: tuple[str, ...],
+    case_insensitive_dedup: bool,
+) -> list[RelationSummaryRow]:
+    rows: list[RelationSummaryRow] = []
+    rows.extend(build_cross_file_rows(terms, occurrences))
+    # affix_group checks are independent from cross_file filtering.
+    rows.extend(
+        build_affix_group_rows(
+            candidates=candidates,
+            normalization_settings=normalization_settings,
+            dedup_to_term_id=dedup_to_term_id,
+            term_by_id=term_by_id,
+            affix_delimiters=affix_delimiters,
+            case_insensitive_dedup=case_insensitive_dedup,
+        )
+    )
+    return sorted(
+        rows,
+        key=lambda row: (
+            row.relation_type,
+            row.affix_role,
+            row.affix_anchor_term,
+            row.affix_related_list,
+            row.cross_term,
+        ),
+    )
 
 
 def build_review_items(
@@ -136,127 +210,26 @@ def build_review_items(
     return review_items, reasons_by_term
 
 
-def _build_containment_relations(terms: list[TermEntry], min_len: int) -> list[TermRelation]:
-    relations: list[TermRelation] = []
-    for short in terms:
-        if len(short.term_norm) < min_len:
+def _split_by_first_delimiter(text: str, delimiters: tuple[str, ...]) -> tuple[str, str, str] | None:
+    best_index: int | None = None
+    best_delimiter = ""
+
+    for delimiter in delimiters:
+        index = text.find(delimiter)
+        if index < 0:
             continue
-        for long in terms:
-            if short.term_id == long.term_id:
-                continue
-            if short.term_norm in long.term_norm:
-                relations.append(
-                    TermRelation(
-                        source_term_id=short.term_id,
-                        source_term=short.term_norm,
-                        relation_type="variant_of",
-                        target_term_id=long.term_id,
-                        target_term=long.term_norm,
-                        evidence_count=1,
-                        confidence=0.7,
-                        rule_id="containment_simple",
-                    )
-                )
-    return _dedup_relations(relations)
+        if best_index is None or index < best_index:
+            best_index = index
+            best_delimiter = delimiter
 
+    if best_index is None:
+        return None
 
-def _build_compound_relations_from_terms(
-    terms: list[TermEntry],
-    case_insensitive_dedup: bool,
-    compound_delimiters: tuple[str, ...],
-    term_by_id: dict[str, TermEntry],
-) -> list[TermRelation]:
-    delimiters = tuple(item for item in compound_delimiters if str(item).strip())
-    if not delimiters:
-        delimiters = ("·",)
-
-    dedup_to_term_id: dict[str, str] = {
-        build_dedup_key(term.term_norm, case_insensitive_dedup): term.term_id
-        for term in terms
-    }
-
-    relations: list[TermRelation] = []
-    for compound_term in terms:
-        compound_text = compound_term.term_norm
-        for delimiter in delimiters:
-            if delimiter not in compound_text:
-                continue
-
-            head_text, suffix_text = compound_text.split(delimiter, 1)
-            head_text = head_text.strip()
-            suffix_text = suffix_text.strip()
-            if not head_text or not suffix_text:
-                continue
-
-            head_id = dedup_to_term_id.get(build_dedup_key(head_text, case_insensitive_dedup))
-            suffix_id = dedup_to_term_id.get(build_dedup_key(suffix_text, case_insensitive_dedup))
-            if not head_id or not suffix_id:
-                continue
-
-            relations.append(
-                TermRelation(
-                    source_term_id=compound_term.term_id,
-                    source_term=compound_text,
-                    relation_type="has_head",
-                    target_term_id=head_id,
-                    target_term=term_by_id[head_id].term_norm,
-                    evidence_count=1,
-                    confidence=1.0,
-                    rule_id="compound_postprocess",
-                )
-            )
-            relations.append(
-                TermRelation(
-                    source_term_id=compound_term.term_id,
-                    source_term=compound_text,
-                    relation_type="has_suffix",
-                    target_term_id=suffix_id,
-                    target_term=term_by_id[suffix_id].term_norm,
-                    evidence_count=1,
-                    confidence=1.0,
-                    rule_id="compound_postprocess",
-                )
-            )
-            relations.append(
-                TermRelation(
-                    source_term_id=head_id,
-                    source_term=term_by_id[head_id].term_norm,
-                    relation_type="head_suffix_pair",
-                    target_term_id=suffix_id,
-                    target_term=term_by_id[suffix_id].term_norm,
-                    evidence_count=1,
-                    confidence=1.0,
-                    rule_id="compound_postprocess",
-                )
-            )
-
-    return _dedup_relations(relations)
-
-
-def _dedup_relations(relations: list[TermRelation]) -> list[TermRelation]:
-    merged: dict[tuple[str, str, str, str], TermRelation] = {}
-    for rel in relations:
-        key = (
-            rel.source_term_id,
-            rel.relation_type,
-            rel.target_term_id,
-            rel.rule_id,
-        )
-        existing = merged.get(key)
-        if existing is None:
-            merged[key] = rel
-        else:
-            merged[key] = TermRelation(
-                source_term_id=existing.source_term_id,
-                source_term=existing.source_term,
-                relation_type=existing.relation_type,
-                target_term_id=existing.target_term_id,
-                target_term=existing.target_term,
-                evidence_count=existing.evidence_count + rel.evidence_count,
-                confidence=max(existing.confidence, rel.confidence),
-                rule_id=existing.rule_id,
-            )
-    return list(merged.values())
+    prefix_raw = text[:best_index]
+    suffix_raw = text[best_index + len(best_delimiter) :]
+    if not prefix_raw.strip() or not suffix_raw.strip():
+        return None
+    return prefix_raw, suffix_raw, best_delimiter
 
 
 def _term_review_reasons(term: str, thresholds: ThresholdSettings) -> list[str]:
