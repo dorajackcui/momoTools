@@ -7,6 +7,10 @@ RESTRICTED_PREFIXES = (
     "tests/_private_data/",
 )
 
+ALLOWED_PATHS = {
+    "tests/_private_data/README.md",
+}
+
 
 def _run_git(args: list[str]) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
@@ -23,6 +27,8 @@ def _normalize_paths(raw: str) -> list[str]:
 
 def _is_restricted(path: str) -> bool:
     normalized = path.replace("\\", "/")
+    if normalized in ALLOWED_PATHS:
+        return False
     return any(normalized.startswith(prefix) for prefix in RESTRICTED_PREFIXES)
 
 
