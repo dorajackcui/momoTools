@@ -1,4 +1,4 @@
-import os
+﻿import os
 import webbrowser
 from tkinter import filedialog
 
@@ -150,6 +150,7 @@ class BatchController(BaseController):
             return
         self.master_file_path = file_path
         self._require_frame().set_master_file_label(file_path)
+        self._ensure_master_file_ready(file_path)
 
     def select_config_file(self):
         initial_dir = ""
@@ -349,6 +350,8 @@ class BatchController(BaseController):
         if view_config is None:
             return
         config = self._build_core_config(view_config)
+        if not self._ensure_master_file_ready(config.master_file):
+            return
         errors = self.runner.precheck(config)
         if errors:
             self.dialogs.error(strings.ERROR_TITLE, "Batch precheck failed:\n" + "\n".join(errors))
@@ -363,6 +366,8 @@ class BatchController(BaseController):
         if view_config is None:
             return
         config = self._build_core_config(view_config)
+        if not self._ensure_master_file_ready(config.master_file):
+            return
         errors = self.runner.precheck(config)
         if errors:
             self.dialogs.error(strings.ERROR_TITLE, "Batch precheck failed:\n" + "\n".join(errors))
@@ -413,6 +418,7 @@ class BatchController(BaseController):
                 master_match_col=int(view_config.defaults_single.master_match_col),
                 fill_blank_only=bool(view_config.defaults_single.fill_blank_only),
                 post_process_enabled=bool(view_config.defaults_single.post_process_enabled),
+                allow_blank_write=bool(view_config.defaults_single.allow_blank_write),
             )
         else:
             defaults = BatchDefaultsReverse(
@@ -422,6 +428,7 @@ class BatchController(BaseController):
                 master_key_col=int(view_config.defaults_reverse.master_key_col),
                 master_match_col=int(view_config.defaults_reverse.master_match_col),
                 fill_blank_only=bool(view_config.defaults_reverse.fill_blank_only),
+                allow_blank_write=bool(view_config.defaults_reverse.allow_blank_write),
             )
 
         return BatchConfigV1(
@@ -455,3 +462,4 @@ class BatchController(BaseController):
                     continue
                 lines.append(f"- #{result.job_index} {result.job_name}: {result.error}")
         return "\n".join(lines)
+

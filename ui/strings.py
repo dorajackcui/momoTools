@@ -19,6 +19,10 @@ REQUIRE_STATS_FOLDER = "Please select stats source folder first."
 REQUIRE_OUTPUT_FILE = "Please select output file first."
 REQUIRE_TERMINOLOGY_INPUT = "Please select input folder, rule config, and output file."
 TASK_ALREADY_RUNNING = "A task is already running. Please wait."
+MASTER_FILE_LOCKED_WARNING = (
+    "Master file is open or locked.\n"
+    "Please close it in Excel, then retry."
+)
 VIEW_LOGS_BUTTON = "View Logs"
 LOG_WINDOW_TITLE = "Execution Logs"
 

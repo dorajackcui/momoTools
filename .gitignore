@@ -29,3 +29,8 @@ env/
 
 
 *.ico
+
+# Private local regression samples (never commit)
+tests/_private_data/**
+!tests/_private_data/
+!tests/_private_data/README.md

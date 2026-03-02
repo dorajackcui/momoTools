@@ -24,6 +24,7 @@ class UpdaterViewConfigTestCase(unittest.TestCase):
         column_count="1",
         fill_blank=False,
         post_process=True,
+        allow_blank_write=False,
     ):
         frame = UpdaterFrame.__new__(UpdaterFrame)
         frame.target_key_col_var = DummyVar(target_key)
@@ -35,6 +36,7 @@ class UpdaterViewConfigTestCase(unittest.TestCase):
         frame.column_count_var = DummyVar(column_count)
         frame.fill_blank_var = DummyVar(fill_blank)
         frame.post_process_var = DummyVar(post_process)
+        frame.allow_blank_write_var = DummyVar(allow_blank_write)
         return frame
 
     def test_get_config_default_mapping(self):
@@ -49,6 +51,7 @@ class UpdaterViewConfigTestCase(unittest.TestCase):
         self.assertEqual(config.master_content_start_col, 3)
         self.assertEqual(config.column_count, 1)
         self.assertFalse(config.fill_blank_only)
+        self.assertFalse(config.allow_blank_write)
         self.assertTrue(config.post_process_enabled)
 
     def test_get_config_invalid_column_count(self):
@@ -59,4 +62,3 @@ class UpdaterViewConfigTestCase(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-

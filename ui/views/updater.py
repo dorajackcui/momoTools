@@ -1,4 +1,4 @@
-import tkinter as tk
+﻿import tkinter as tk
 from tkinter import ttk
 
 from ui import strings, theme
@@ -85,6 +85,13 @@ class UpdaterFrame(BaseFrame):
             parent=toggle_frame,
             pady=(0, theme.SPACING_XS),
         )
+        self.allow_blank_write_var = tk.BooleanVar(value=False)
+        self.create_toggle(
+            text="允许写入空白值（谨慎）",
+            variable=self.allow_blank_write_var,
+            parent=toggle_frame,
+            pady=(0, theme.SPACING_XS),
+        )
 
         self.create_primary_button(
             text="填充小表",
@@ -110,5 +117,7 @@ class UpdaterFrame(BaseFrame):
             ),
             column_count=parse_positive_int(self.column_count_var.get(), "更新列数"),
             fill_blank_only=bool(self.fill_blank_var.get()),
+            allow_blank_write=bool(self.allow_blank_write_var.get()),
             post_process_enabled=bool(self.post_process_var.get()),
         )
+

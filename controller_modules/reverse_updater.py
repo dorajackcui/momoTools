@@ -1,4 +1,4 @@
-from ui import strings
+﻿from ui import strings
 from .base import BaseController
 
 
@@ -15,6 +15,7 @@ class ReverseUpdaterController(BaseController):
             return
         self.master_file_path = file_path
         self._require_frame().set_master_file_label(file_path)
+        self._ensure_master_file_ready(file_path)
         self.processor.set_master_file(file_path)
 
     def select_target_folder(self):
@@ -29,6 +30,8 @@ class ReverseUpdaterController(BaseController):
         if not self._ensure_required_values(
             [(self.master_file_path and self.target_folder, strings.REQUIRE_MASTER_TARGET)]
         ):
+            return
+        if not self._ensure_master_file_ready(self.master_file_path):
             return
 
         config = self._get_config_or_notify()
@@ -47,6 +50,7 @@ class ReverseUpdaterController(BaseController):
                 config.master_update_col,
             )
             self.processor.set_fill_blank_only(config.fill_blank_only)
+            self.processor.set_allow_blank_write(config.allow_blank_write)
             return self.processor.process_files()
 
         self._run_action_or_notify(
@@ -58,3 +62,4 @@ class ReverseUpdaterController(BaseController):
             error_title="处理失败",
             task_name="Target->Master",
         )
+

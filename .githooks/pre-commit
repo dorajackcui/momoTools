@@ -1,0 +1,2 @@
+#!/bin/sh
+python scripts/git_hooks/block_private_data.py --mode pre-commit

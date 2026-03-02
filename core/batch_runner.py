@@ -138,6 +138,7 @@ class BatchRunner:
                 job.variable_column - 1,
             )
             processor.set_fill_blank_only(defaults.fill_blank_only)
+            processor.set_allow_blank_write(defaults.allow_blank_write)
             processor.set_post_process_enabled(defaults.post_process_enabled)
             return int(processor.process_files() or 0)
 
@@ -157,6 +158,7 @@ class BatchRunner:
             job.variable_column - 1,
         )
         processor.set_fill_blank_only(defaults.fill_blank_only)
+        processor.set_allow_blank_write(defaults.allow_blank_write)
         return int(processor.process_files() or 0)
 
     @staticmethod

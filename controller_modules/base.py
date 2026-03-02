@@ -1,3 +1,4 @@
+import os
 from tkinter import filedialog
 from typing import Callable, Iterable, Optional, Tuple
 
@@ -44,6 +45,17 @@ class BaseController:
             self.dialogs.error(strings.ERROR_TITLE, message)
             return False
         return True
+
+    def _ensure_master_file_ready(self, master_file_path: str) -> bool:
+        path = str(master_file_path or "").strip()
+        if (not path) or (not os.path.isfile(path)):
+            return True
+        try:
+            with open(path, "a+b"):
+                return True
+        except OSError:
+            self.dialogs.warning(strings.WARNING_TITLE, strings.MASTER_FILE_LOCKED_WARNING)
+            return False
 
     def _get_config_or_notify(self, validation_prefix: str = strings.VALIDATION_CONFIG_PREFIX):
         try:

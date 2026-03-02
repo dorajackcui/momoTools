@@ -13,6 +13,7 @@ class UpdaterConfig:
     column_count: int
     fill_blank_only: bool
     post_process_enabled: bool
+    allow_blank_write: bool = False
 
 
 @dataclass(frozen=True)
@@ -24,6 +25,7 @@ class ReverseConfig:
     master_match_col: int
     master_update_col: int
     fill_blank_only: bool
+    allow_blank_write: bool = False
 
 
 @dataclass(frozen=True)
@@ -37,6 +39,7 @@ class MultiColumnConfig:
     column_count: int
     fill_blank_only: bool
     post_process_enabled: bool
+    allow_blank_write: bool = False
 
 
 @dataclass(frozen=True)
@@ -63,6 +66,7 @@ class BatchDefaultsSingle:
     master_match_col: int
     fill_blank_only: bool
     post_process_enabled: bool
+    allow_blank_write: bool = False
 
 
 @dataclass(frozen=True)
@@ -73,6 +77,7 @@ class BatchDefaultsReverse:
     master_key_col: int
     master_match_col: int
     fill_blank_only: bool
+    allow_blank_write: bool = False
 
 
 @dataclass(frozen=True)

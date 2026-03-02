@@ -197,6 +197,13 @@ class BatchFrame(BaseFrame):
             parent=toggle_frame,
             pady=(0, theme.SPACING_XXS),
         )
+        self.allow_blank_write_var = tk.BooleanVar(value=False)
+        self.create_toggle(
+            text="Allow blank write (careful)",
+            variable=self.allow_blank_write_var,
+            parent=toggle_frame,
+            pady=(0, theme.SPACING_XXS),
+        )
         self.post_process_var = tk.BooleanVar(value=True)
         self.create_toggle(
             text="Enable post-process (single mode only)",
@@ -501,6 +508,7 @@ class BatchFrame(BaseFrame):
             self.master_key_col_var.set(str(defaults.master_key_col))
             self.master_match_col_var.set(str(defaults.master_match_col))
             self.fill_blank_var.set(bool(defaults.fill_blank_only))
+            self.allow_blank_write_var.set(bool(defaults.allow_blank_write))
             self.post_process_var.set(bool(defaults.post_process_enabled))
         else:
             defaults = config.defaults
@@ -510,6 +518,7 @@ class BatchFrame(BaseFrame):
             self.master_key_col_var.set(str(defaults.master_key_col))
             self.master_match_col_var.set(str(defaults.master_match_col))
             self.fill_blank_var.set(bool(defaults.fill_blank_only))
+            self.allow_blank_write_var.set(bool(defaults.allow_blank_write))
 
         self.job_rows = []
         for row in config.jobs:
@@ -600,6 +609,7 @@ class BatchFrame(BaseFrame):
                 master_key_col=master_key_col,
                 master_match_col=master_match_col,
                 fill_blank_only=bool(self.fill_blank_var.get()),
+                allow_blank_write=bool(self.allow_blank_write_var.get()),
                 post_process_enabled=bool(self.post_process_var.get()),
             ),
             defaults_reverse=BatchDefaultsReverse(
@@ -609,6 +619,7 @@ class BatchFrame(BaseFrame):
                 master_key_col=master_key_col,
                 master_match_col=master_match_col,
                 fill_blank_only=bool(self.fill_blank_var.get()),
+                allow_blank_write=bool(self.allow_blank_write_var.get()),
             ),
             jobs=tuple(jobs),
             runtime=BatchRuntimeOptions(

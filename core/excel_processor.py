@@ -39,6 +39,7 @@ class ExcelProcessor:
             "clothesdes_10208",
         ]
         self.fill_blank_only = False
+        self.allow_blank_write = False
         self.post_process_enabled = True
 
         self.io_contract = ModeIOContract(
@@ -69,6 +70,9 @@ class ExcelProcessor:
 
     def set_fill_blank_only(self, enabled: bool):
         self.fill_blank_only = bool(enabled)
+
+    def set_allow_blank_write(self, enabled: bool):
+        self.allow_blank_write = bool(enabled)
 
     def log(self, message):
         self.log_callback(message)
@@ -206,6 +210,9 @@ class ExcelProcessor:
                             continue
 
                         if combined_key in master_dict:
+                            content_value = master_dict[combined_key]
+                            if (not self.allow_blank_write) and is_blank_value(content_value):
+                                continue
                             current_value = (
                                 row_values[update_offset]
                                 if self.fill_blank_only and update_offset < len(row_values)
@@ -214,7 +221,7 @@ class ExcelProcessor:
                             if self.fill_blank_only and (not is_blank_value(current_value)):
                                 continue
                             update_col = self.target_update_col + 1
-                            updates[(idx, update_col)] = master_dict[combined_key]
+                            updates[(idx, update_col)] = content_value
                             updated += 1
                     except Exception as row_exc:
                         self._log_error(

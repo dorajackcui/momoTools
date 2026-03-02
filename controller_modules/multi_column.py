@@ -1,4 +1,4 @@
-from ui import strings
+﻿from ui import strings
 from .base import BaseController
 
 
@@ -15,6 +15,7 @@ class MultiColumnController(BaseController):
             return
         self.master_file_path = file_path
         self._require_frame().set_master_file_label(file_path)
+        self._ensure_master_file_ready(file_path)
         self.processor.set_master_file(file_path)
 
     def select_multi_target_folder(self):
@@ -30,6 +31,8 @@ class MultiColumnController(BaseController):
             [(self.master_file_path and self.target_folder, strings.REQUIRE_MASTER_TARGET)]
         ):
             return
+        if not self._ensure_master_file_ready(self.master_file_path):
+            return
 
         config = self._get_config_or_notify()
         if config is None:
@@ -44,6 +47,7 @@ class MultiColumnController(BaseController):
             self.processor.set_start_column(config.master_start_col)
             self.processor.set_column_count(config.column_count)
             self.processor.set_fill_blank_only(config.fill_blank_only)
+            self.processor.set_allow_blank_write(config.allow_blank_write)
             self.processor.set_post_process_enabled(config.post_process_enabled)
             return self.processor.process_files()
 
@@ -55,3 +59,4 @@ class MultiColumnController(BaseController):
             ),
             task_name="Master->Target (Multi)",
         )
+

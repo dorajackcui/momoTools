@@ -9,7 +9,7 @@ import openpyxl
 
 from core.deep_replace_processor import DeepReplaceProcessor
 from core.excel_processor import ExcelProcessor
-from core.kernel import get_stable_workers_cap, run_parallel_map
+from core.kernel import get_stable_workers_cap, is_blank_value, run_parallel_map
 from core.multi_column_processor import MultiColumnExcelProcessor
 from core.reverse_excel_processor import ReverseExcelProcessor
 from core.untranslated_stats_processor import UntranslatedStatsProcessor
@@ -135,6 +135,71 @@ class CoreProcessorsRegressionTestCase(unittest.TestCase):
         self.assertEqual(updated_count, 1)
         self.assertEqual(read_cell(target_path, 2, 31), "WIDE_V")
 
+    def test_single_skip_blank_write_by_default(self):
+        master_path = self.root / "master_blank_single.xlsx"
+        target_folder = self.root / "targets_blank_single"
+        target_folder.mkdir()
+        target_path = target_folder / "target.xlsx"
+
+        write_workbook(
+            master_path,
+            [
+                ["id", "key", "match", "value"],
+                ["", "K1", "M1", ""],
+            ],
+        )
+        write_workbook(
+            target_path,
+            [
+                ["key", "match", "translation"],
+                ["K1", "M1", "keep-me"],
+            ],
+        )
+
+        processor = ExcelProcessor(log_callback=lambda _msg: None)
+        processor.set_master_file(str(master_path))
+        processor.set_target_folder(str(target_folder))
+        processor.set_post_process_enabled(False)
+        processor.set_fill_blank_only(False)
+
+        updated_count = processor.process_files()
+
+        self.assertEqual(updated_count, 0)
+        self.assertEqual(read_cell(target_path, 2, 3), "keep-me")
+
+    def test_single_allow_blank_write_can_clear_target(self):
+        master_path = self.root / "master_blank_single_allow.xlsx"
+        target_folder = self.root / "targets_blank_single_allow"
+        target_folder.mkdir()
+        target_path = target_folder / "target.xlsx"
+
+        write_workbook(
+            master_path,
+            [
+                ["id", "key", "match", "value"],
+                ["", "K1", "M1", ""],
+            ],
+        )
+        write_workbook(
+            target_path,
+            [
+                ["key", "match", "translation"],
+                ["K1", "M1", "keep-me"],
+            ],
+        )
+
+        processor = ExcelProcessor(log_callback=lambda _msg: None)
+        processor.set_master_file(str(master_path))
+        processor.set_target_folder(str(target_folder))
+        processor.set_post_process_enabled(False)
+        processor.set_fill_blank_only(False)
+        processor.set_allow_blank_write(True)
+
+        updated_count = processor.process_files()
+
+        self.assertEqual(updated_count, 1)
+        self.assertTrue(is_blank_value(read_cell(target_path, 2, 3)))
+
     def test_multi_column_fill_blank_only_preserves_non_blank_cells(self):
         master_path = self.root / "master_multi_blank.xlsx"
         target_folder = self.root / "targets_multi_blank"
@@ -168,6 +233,40 @@ class CoreProcessorsRegressionTestCase(unittest.TestCase):
         self.assertEqual(updated_count, 1)
         self.assertEqual(read_cell(target_path, 2, 5), "A1")
         self.assertEqual(read_cell(target_path, 2, 6), "keep")
+
+    def test_multi_column_skip_blank_content_per_cell_by_default(self):
+        master_path = self.root / "master_multi_blank_content.xlsx"
+        target_folder = self.root / "targets_multi_blank_content"
+        target_folder.mkdir()
+        target_path = target_folder / "target.xlsx"
+
+        write_workbook(
+            master_path,
+            [
+                ["id", "key", "match", "meta", "v1", "v2"],
+                ["", "K1", "M1", "", "A1", ""],
+            ],
+        )
+        write_workbook(
+            target_path,
+            [
+                ["id", "key", "match", "meta", "out1", "out2"],
+                ["", "K1", "M1", "", "old1", "old2"],
+            ],
+        )
+
+        processor = MultiColumnExcelProcessor(log_callback=lambda _msg: None)
+        processor.set_master_file(str(master_path))
+        processor.set_target_folder(str(target_folder))
+        processor.set_column_count(2)
+        processor.set_post_process_enabled(False)
+        processor.set_fill_blank_only(False)
+
+        updated_count = processor.process_files()
+
+        self.assertEqual(updated_count, 1)
+        self.assertEqual(read_cell(target_path, 2, 5), "A1")
+        self.assertEqual(read_cell(target_path, 2, 6), "old2")
 
     def test_reverse_update_has_deterministic_merge_precedence(self):
         master_path = self.root / "master_reverse.xlsx"
@@ -242,6 +341,65 @@ class CoreProcessorsRegressionTestCase(unittest.TestCase):
 
         self.assertEqual(updated_count, 1)
         self.assertEqual(read_cell(master_path, 2, 26), "from_sparse")
+
+    def test_reverse_skip_blank_write_by_default(self):
+        master_path = self.root / "master_reverse_blank.xlsx"
+        target_folder = self.root / "targets_reverse_blank"
+        target_folder.mkdir()
+
+        write_workbook(
+            master_path,
+            [
+                ["id", "key", "match", "translation"],
+                ["", "K1", "M1", "keep-me"],
+            ],
+        )
+        write_workbook(
+            target_folder / "a.xlsx",
+            [
+                ["key", "match", "translation"],
+                ["K1", "M1", ""],
+            ],
+        )
+
+        processor = ReverseExcelProcessor(log_callback=lambda _msg: None)
+        processor.set_master_file(str(master_path))
+        processor.set_target_folder(str(target_folder))
+
+        updated_count = processor.process_files()
+
+        self.assertEqual(updated_count, 0)
+        self.assertEqual(read_cell(master_path, 2, 4), "keep-me")
+
+    def test_reverse_allow_blank_write_can_clear_master(self):
+        master_path = self.root / "master_reverse_blank_allow.xlsx"
+        target_folder = self.root / "targets_reverse_blank_allow"
+        target_folder.mkdir()
+
+        write_workbook(
+            master_path,
+            [
+                ["id", "key", "match", "translation"],
+                ["", "K1", "M1", "keep-me"],
+            ],
+        )
+        write_workbook(
+            target_folder / "a.xlsx",
+            [
+                ["key", "match", "translation"],
+                ["K1", "M1", ""],
+            ],
+        )
+
+        processor = ReverseExcelProcessor(log_callback=lambda _msg: None)
+        processor.set_master_file(str(master_path))
+        processor.set_target_folder(str(target_folder))
+        processor.set_allow_blank_write(True)
+
+        updated_count = processor.process_files()
+
+        self.assertEqual(updated_count, 1)
+        self.assertTrue(is_blank_value(read_cell(master_path, 2, 4)))
 
     def test_stable_workers_cap_bounds(self):
         with patch("core.kernel.excel_io.os.cpu_count", return_value=1):

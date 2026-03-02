@@ -1,6 +1,6 @@
 # IO Format Requirements (Current Implementation)
 
-Last updated: 2026-02-28
+Last updated: 2026-03-02
 Audience: agents and engineers touching Excel read/write behavior
 Purpose: define current IO semantics and special-value handling rules
 Out of scope: UI flow, architecture rationale, and unresolved product policy decisions
@@ -48,6 +48,13 @@ Function: `safe_to_str(value, strip=...)`
 2. Non-string values are converted by `str(value)`.
 3. With `strip=False`, leading/trailing whitespace is preserved.
 
+### 2.4 Blank write policy (`allow_blank_write`)
+
+1. New control field: `allow_blank_write` (default `False`).
+2. When `allow_blank_write=False`, content values considered blank by `is_blank_value` are skipped and not written.
+3. When `allow_blank_write=True`, blank values are allowed to write through (including clearing target/master cells).
+4. This switch does not change key matching rules or `fill_blank_only` blank detection.
+
 ## 3) Flow Semantics
 
 ### 3.1 Master -> target (single)
@@ -56,7 +63,10 @@ Function: `safe_to_str(value, strip=...)`
 2. For matched target rows:
    1. overwrite mode: always write matched value
    2. fill-blank-only mode: write only if target update cell is blank by `is_blank_value`
-3. `post_process_enabled` only controls COM post-process; it does not change business match/update decisions.
+3. blank content write:
+   1. default (`allow_blank_write=False`): blank content is skipped
+   2. opt-in (`allow_blank_write=True`): blank content can be written
+4. `post_process_enabled` only controls COM post-process; it does not change business match/update decisions.
 
 ### 3.2 Master -> target (multi)
 
@@ -64,6 +74,7 @@ Function: `safe_to_str(value, strip=...)`
 2. Updates are applied per target column across configured column count.
 3. `fill_blank_only` is evaluated per target cell.
 4. Missing master content columns are treated as `""`.
+5. blank content write follows `allow_blank_write` per cell (default skip blank write).
 
 ### 3.3 Target -> master (reverse)
 
@@ -71,14 +82,15 @@ Function: `safe_to_str(value, strip=...)`
 2. Target content values are normalized with `safe_to_str(..., strip=False)`.
 3. Master rows are updated on combined key match.
 4. `fill_blank_only` checks blank state on the master update cell.
-5. Merge precedence is deterministic:
+5. blank content from target files follows `allow_blank_write` (default skip blank content before merge).
+6. Merge precedence is deterministic:
    1. target file list is sorted by path
    2. merge follows sorted order
    3. later file in sorted order overrides earlier value for same key
 
 ## 4) Special-Value Matrix
 
-| Raw value | As key/match input | As written content | Treated blank in `fill_blank_only` |
+| Raw value | As key/match input | As written content | Treated blank in `fill_blank_only` / `allow_blank_write=False` |
 | --- | --- | --- | --- |
 | `None` | `""` (invalid key component) | `""` | Yes |
 | `""` | empty (invalid key component) | `""` | Yes |

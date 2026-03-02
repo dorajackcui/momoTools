@@ -23,6 +23,7 @@ class FakeSingleProcessor:
         self.target_cols = None
         self.master_cols = None
         self.fill_blank_only = None
+        self.allow_blank_write = None
         self.post_process_enabled = None
         self.calls = []
         self.cleanup_calls = 0
@@ -42,6 +43,9 @@ class FakeSingleProcessor:
     def set_fill_blank_only(self, enabled):
         self.fill_blank_only = enabled
 
+    def set_allow_blank_write(self, enabled):
+        self.allow_blank_write = enabled
+
     def set_post_process_enabled(self, enabled):
         self.post_process_enabled = enabled
 
@@ -56,6 +60,7 @@ class FakeSingleProcessor:
                 "target_cols": self.target_cols,
                 "master_cols": self.master_cols,
                 "fill_blank_only": self.fill_blank_only,
+                "allow_blank_write": self.allow_blank_write,
                 "post_process_enabled": self.post_process_enabled,
             }
         )
@@ -73,6 +78,7 @@ class FakeReverseProcessor:
         self.target_cols = None
         self.master_cols = None
         self.fill_blank_only = None
+        self.allow_blank_write = None
         self.calls = []
         self.cleanup_calls = 0
 
@@ -91,6 +97,9 @@ class FakeReverseProcessor:
     def set_fill_blank_only(self, enabled):
         self.fill_blank_only = enabled
 
+    def set_allow_blank_write(self, enabled):
+        self.allow_blank_write = enabled
+
     def process_files(self):
         value = self.results.get(self.target_folder, 0)
         if isinstance(value, Exception):
@@ -102,6 +111,7 @@ class FakeReverseProcessor:
                 "target_cols": self.target_cols,
                 "master_cols": self.master_cols,
                 "fill_blank_only": self.fill_blank_only,
+                "allow_blank_write": self.allow_blank_write,
             }
         )
         return value
@@ -136,6 +146,7 @@ class BatchRunnerTestCase(unittest.TestCase):
                     master_match_col=3,
                     fill_blank_only=False,
                     post_process_enabled=True,
+                    allow_blank_write=True,
                 ),
                 jobs=(
                     BatchJobConfig(name="job-1", target_folder=folder1, variable_column=4),
@@ -150,6 +161,7 @@ class BatchRunnerTestCase(unittest.TestCase):
         self.assertEqual(summary.jobs_succeeded, 2)
         self.assertEqual(single.calls[0]["target_cols"], (0, 1, 2))
         self.assertEqual(single.calls[0]["master_cols"], (1, 2, 3))
+        self.assertTrue(single.calls[0]["allow_blank_write"])
         self.assertEqual(single.calls[1]["master_cols"], (1, 2, 4))
 
     def test_reverse_mode_order_and_cumulative_master(self):
@@ -176,6 +188,7 @@ class BatchRunnerTestCase(unittest.TestCase):
                     master_key_col=2,
                     master_match_col=3,
                     fill_blank_only=False,
+                    allow_blank_write=True,
                 ),
                 jobs=(
                     BatchJobConfig(name="job-1", target_folder=folder1, variable_column=10),
@@ -190,6 +203,7 @@ class BatchRunnerTestCase(unittest.TestCase):
         self.assertEqual([item["target_folder"] for item in reverse.calls], [folder1, folder2])
         self.assertEqual(reverse.calls[0]["master_file"], master_path)
         self.assertEqual(reverse.calls[0]["master_cols"], (1, 2, 9))
+        self.assertTrue(reverse.calls[0]["allow_blank_write"])
         self.assertEqual(reverse.calls[1]["master_cols"], (1, 2, 10))
         self.assertTrue(summary.backup_path)
         self.assertTrue(os.path.basename(summary.backup_path).startswith("master.batch_backup."))

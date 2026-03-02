@@ -39,6 +39,7 @@ class MultiColumnExcelProcessor:
             "clothesdes_10208",
         ]
         self.fill_blank_only = False
+        self.allow_blank_write = False
         self.post_process_enabled = True
 
         self.io_contract = ModeIOContract(
@@ -80,6 +81,9 @@ class MultiColumnExcelProcessor:
 
     def set_fill_blank_only(self, enabled: bool):
         self.fill_blank_only = bool(enabled)
+
+    def set_allow_blank_write(self, enabled: bool):
+        self.allow_blank_write = bool(enabled)
 
     def log(self, message):
         self.log_callback(message)
@@ -288,6 +292,8 @@ class MultiColumnExcelProcessor:
 
                         content_values = master_dict[combined_key]
                         for i, content_value in enumerate(content_values):
+                            if (not self.allow_blank_write) and is_blank_value(content_value):
+                                continue
                             current_value = (
                                 row_values[update_start_offset + i]
                                 if self.fill_blank_only and (update_start_offset + i) < len(row_values)

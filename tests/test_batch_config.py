@@ -45,6 +45,7 @@ class BatchConfigTestCase(unittest.TestCase):
 
         self.assertEqual(config.mode, MODE_MASTER_TO_TARGET_SINGLE)
         self.assertEqual(config.defaults.target_key_col, 1)
+        self.assertFalse(config.defaults.allow_blank_write)
         self.assertEqual(config.jobs[0].variable_column, 4)
         self.assertTrue(config.runtime.continue_on_error)
         self.assertEqual(config.legacy_auto_fill_rules, tuple())
@@ -61,6 +62,7 @@ class BatchConfigTestCase(unittest.TestCase):
                 "master_key_col": 2,
                 "master_match_col": 3,
                 "fill_blank_only": True,
+                "allow_blank_write": True,
             },
             "jobs": [
                 {
@@ -81,6 +83,7 @@ class BatchConfigTestCase(unittest.TestCase):
         self.assertEqual(config.mode, MODE_TARGET_TO_MASTER_REVERSE)
         self.assertEqual(config.jobs[0].name, "job-1")
         self.assertEqual(config.jobs[0].variable_column, 10)
+        self.assertTrue(config.defaults.allow_blank_write)
 
     def test_validate_invalid_schema_and_mode_and_missing_fields(self):
         payload = {
@@ -141,6 +144,7 @@ class BatchConfigTestCase(unittest.TestCase):
                 "master_match_col": 3,
                 "fill_blank_only": False,
                 "post_process_enabled": True,
+                "allow_blank_write": True,
             },
             "jobs": [
                 {
@@ -180,7 +184,35 @@ class BatchConfigTestCase(unittest.TestCase):
         self.assertEqual(loaded.mode, MODE_MASTER_TO_TARGET_SINGLE)
         self.assertEqual(len(loaded.jobs), 2)
         self.assertEqual(loaded.jobs[1].variable_column, 5)
+        self.assertTrue(loaded.defaults.allow_blank_write)
         self.assertEqual(len(loaded.legacy_auto_fill_rules), 0)
+
+    def test_validate_allow_blank_write_type_error(self):
+        payload = {
+            "schema_version": 1,
+            "mode": MODE_MASTER_TO_TARGET_SINGLE,
+            "master_file": "C:/master.xlsx",
+            "defaults": {
+                "target_key_col": 1,
+                "target_match_col": 2,
+                "target_update_start_col": 3,
+                "master_key_col": 2,
+                "master_match_col": 3,
+                "fill_blank_only": False,
+                "post_process_enabled": True,
+                "allow_blank_write": "false",
+            },
+            "jobs": [
+                {
+                    "name": "pkg1",
+                    "target_folder": "C:/pkg1",
+                    "master_content_start_col": 4,
+                }
+            ],
+            "runtime": {"continue_on_error": True},
+        }
+        errors = validate_config(payload)
+        self.assertTrue(any("defaults.allow_blank_write must be a boolean." in item for item in errors))
 
 
 if __name__ == "__main__":

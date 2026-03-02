@@ -1,4 +1,4 @@
-import json
+﻿import json
 import os
 import tempfile
 import unittest
@@ -79,6 +79,7 @@ class FakeSingleUpdaterProcessor:
         self.target_cols = None
         self.master_cols = None
         self.fill_blank_only = None
+        self.allow_blank_write = None
         self.post_process_enabled = None
         self.processed = False
 
@@ -96,6 +97,9 @@ class FakeSingleUpdaterProcessor:
 
     def set_fill_blank_only(self, enabled):
         self.fill_blank_only = enabled
+
+    def set_allow_blank_write(self, enabled):
+        self.allow_blank_write = enabled
 
     def set_post_process_enabled(self, enabled):
         self.post_process_enabled = enabled
@@ -117,6 +121,7 @@ class FakeMultiUpdaterProcessor:
         self.master_start = None
         self.column_count = None
         self.fill_blank_only = None
+        self.allow_blank_write = None
         self.post_process_enabled = None
         self.processed = False
 
@@ -150,6 +155,9 @@ class FakeMultiUpdaterProcessor:
     def set_fill_blank_only(self, enabled):
         self.fill_blank_only = enabled
 
+    def set_allow_blank_write(self, enabled):
+        self.allow_blank_write = enabled
+
     def set_post_process_enabled(self, enabled):
         self.post_process_enabled = enabled
 
@@ -163,6 +171,7 @@ class FakeReverseProcessor:
         self.target_cols = None
         self.master_cols = None
         self.fill_blank_only = None
+        self.allow_blank_write = None
 
     def set_master_file(self, _path):
         pass
@@ -178,6 +187,9 @@ class FakeReverseProcessor:
 
     def set_fill_blank_only(self, enabled):
         self.fill_blank_only = enabled
+
+    def set_allow_blank_write(self, enabled):
+        self.allow_blank_write = enabled
 
     def process_files(self):
         return 3
@@ -355,7 +367,7 @@ class FakeNoopProcessor:
 
 class ControllersTestCase(unittest.TestCase):
     def test_updater_controller_single_path_success(self):
-        config = UpdaterConfig(0, 1, 2, 1, 2, 3, 1, True, False)
+        config = UpdaterConfig(0, 1, 2, 1, 2, 3, 1, True, False, allow_blank_write=True)
         frame = FakeUpdaterFrame(config)
         single = FakeSingleUpdaterProcessor()
         multi = FakeMultiUpdaterProcessor()
@@ -371,11 +383,12 @@ class ControllersTestCase(unittest.TestCase):
         self.assertEqual(single.target_cols, (0, 1, 2))
         self.assertEqual(single.master_cols, (1, 2, 3))
         self.assertTrue(single.fill_blank_only)
+        self.assertTrue(single.allow_blank_write)
         self.assertFalse(single.post_process_enabled)
         self.assertIn("共更新 11 处数据。", dialogs.infos[0][1])
 
     def test_updater_controller_multi_path_success(self):
-        config = UpdaterConfig(0, 1, 2, 1, 2, 3, 3, False, True)
+        config = UpdaterConfig(0, 1, 2, 1, 2, 3, 3, False, True, allow_blank_write=True)
         frame = FakeUpdaterFrame(config)
         single = FakeSingleUpdaterProcessor()
         multi = FakeMultiUpdaterProcessor()
@@ -396,6 +409,7 @@ class ControllersTestCase(unittest.TestCase):
         self.assertEqual(multi.master_start, 3)
         self.assertEqual(multi.column_count, 3)
         self.assertFalse(multi.fill_blank_only)
+        self.assertTrue(multi.allow_blank_write)
         self.assertTrue(multi.post_process_enabled)
         self.assertIn("共更新 27 处数据。", dialogs.infos[0][1])
 
@@ -415,8 +429,31 @@ class ControllersTestCase(unittest.TestCase):
         self.assertTrue(dialogs.errors)
         self.assertIn("列配置错误", dialogs.errors[0][1])
 
+    def test_updater_controller_master_locked_shows_warning_and_stops(self):
+        config = UpdaterConfig(0, 1, 2, 1, 2, 3, 1, False, True)
+        frame = FakeUpdaterFrame(config)
+        single = FakeSingleUpdaterProcessor()
+        multi = FakeMultiUpdaterProcessor()
+        dialogs = FakeDialogs()
+        controller = UpdaterController(frame, single, multi, dialog_service=dialogs)
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            master_path = os.path.join(temp_dir, "master.xlsx")
+            target_folder = os.path.join(temp_dir, "targets")
+            os.makedirs(target_folder)
+            with open(master_path, "w", encoding="utf-8") as handle:
+                handle.write("placeholder")
+            controller.master_file_path = master_path
+            controller.target_folder = target_folder
+
+            with patch("controller_modules.base.open", side_effect=PermissionError("locked")):
+                controller.process_files()
+
+        self.assertFalse(single.processed)
+        self.assertFalse(multi.processed)
+        self.assertTrue(dialogs.warnings)
     def test_reverse_controller_success(self):
-        config = ReverseConfig(0, 1, 2, 1, 2, 3, False)
+        config = ReverseConfig(0, 1, 2, 1, 2, 3, False, allow_blank_write=True)
         frame = FakeUpdaterFrame(config)
         processor = FakeReverseProcessor()
         dialogs = FakeDialogs()
@@ -429,6 +466,7 @@ class ControllersTestCase(unittest.TestCase):
         self.assertEqual(processor.target_cols, (0, 1, 2))
         self.assertEqual(processor.master_cols, (1, 2, 3))
         self.assertFalse(processor.fill_blank_only)
+        self.assertTrue(processor.allow_blank_write)
         self.assertIn("共更新 3 行。", dialogs.infos[0][1])
 
     def test_clearer_delete_requires_confirm(self):
@@ -582,6 +620,7 @@ class ControllersTestCase(unittest.TestCase):
                 master_match_col=3,
                 fill_blank_only=False,
                 post_process_enabled=True,
+                allow_blank_write=True,
             ),
             defaults_reverse=BatchDefaultsReverse(
                 target_key_col=1,
@@ -590,6 +629,7 @@ class ControllersTestCase(unittest.TestCase):
                 master_key_col=2,
                 master_match_col=3,
                 fill_blank_only=False,
+                allow_blank_write=True,
             ),
             jobs=(
                 BatchJobRow(name="job-1", target_folder="C:/tmp/p1", variable_column=4),
@@ -617,6 +657,8 @@ class ControllersTestCase(unittest.TestCase):
 
         self.assertEqual(len(runner.precheck_calls), 2)
         self.assertEqual(len(runner.run_calls), 1)
+        self.assertTrue(runner.precheck_calls[0].defaults.allow_blank_write)
+        self.assertTrue(runner.run_calls[0].defaults.allow_blank_write)
         self.assertTrue(dialogs.infos)
         self.assertIn("Batch finished", dialogs.infos[-1][1])
 
@@ -640,6 +682,41 @@ class ControllersTestCase(unittest.TestCase):
         self.assertTrue(dialogs.errors)
         self.assertIn("Batch precheck failed", dialogs.errors[0][1])
 
+    def test_batch_controller_master_locked_skips_precheck_and_run(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            master_path = os.path.join(temp_dir, "master.xlsx")
+            with open(master_path, "w", encoding="utf-8") as handle:
+                handle.write("placeholder")
+
+            view_config = self._build_batch_view_config()
+            view_config = BatchViewConfig(
+                mode=view_config.mode,
+                master_file=master_path,
+                config_path=view_config.config_path,
+                defaults_single=view_config.defaults_single,
+                defaults_reverse=view_config.defaults_reverse,
+                jobs=view_config.jobs,
+                runtime=view_config.runtime,
+            )
+            frame = FakeBatchFrame(view_config)
+            dialogs = FakeDialogs()
+            runner = FakeBatchRunner()
+            controller = BatchController(
+                frame,
+                FakeNoopProcessor(),
+                FakeNoopProcessor(),
+                dialog_service=dialogs,
+                state_store=FakeStateStore(),
+                runner=runner,
+            )
+
+            with patch("controller_modules.base.open", side_effect=PermissionError("locked")):
+                controller.precheck_batch()
+                controller.process_files()
+
+        self.assertEqual(len(runner.precheck_calls), 0)
+        self.assertEqual(len(runner.run_calls), 0)
+        self.assertTrue(dialogs.warnings)
     def test_batch_controller_load_and_export_json(self):
         frame = FakeBatchFrame(self._build_batch_view_config())
         dialogs = FakeDialogs()
@@ -890,3 +967,5 @@ class ControllersTestCase(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+

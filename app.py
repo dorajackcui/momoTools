@@ -53,7 +53,7 @@ class ExcelUpdaterApp:
     def __init__(self):
         self.root = tk.Tk()
         self.root.title("Momo build your mastersheet")
-        self.root.geometry("540x680")
+        self.root.geometry("540x700")
         self.root.minsize(520, 640)
         self.root.resizable(True, True)
         self.root.configure(bg=APP_BG)

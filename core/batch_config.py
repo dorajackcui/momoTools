@@ -24,6 +24,7 @@ class BatchDefaultsSingle:
     master_match_col: int
     fill_blank_only: bool
     post_process_enabled: bool
+    allow_blank_write: bool = False
 
 
 @dataclass(frozen=True)
@@ -34,6 +35,7 @@ class BatchDefaultsReverse:
     master_key_col: int
     master_match_col: int
     fill_blank_only: bool
+    allow_blank_write: bool = False
 
 
 @dataclass(frozen=True)
@@ -151,6 +153,8 @@ def _validate_single_defaults(defaults: dict[str, Any]) -> list[str]:
 
     if not isinstance(defaults.get("fill_blank_only"), bool):
         errors.append("defaults.fill_blank_only must be a boolean.")
+    if "allow_blank_write" in defaults and (not isinstance(defaults.get("allow_blank_write"), bool)):
+        errors.append("defaults.allow_blank_write must be a boolean.")
     if not isinstance(defaults.get("post_process_enabled"), bool):
         errors.append("defaults.post_process_enabled must be a boolean.")
     return errors
@@ -171,6 +175,8 @@ def _validate_reverse_defaults(defaults: dict[str, Any]) -> list[str]:
 
     if not isinstance(defaults.get("fill_blank_only"), bool):
         errors.append("defaults.fill_blank_only must be a boolean.")
+    if "allow_blank_write" in defaults and (not isinstance(defaults.get("allow_blank_write"), bool)):
+        errors.append("defaults.allow_blank_write must be a boolean.")
     return errors
 
 
@@ -208,6 +214,7 @@ def to_payload(config: BatchConfigV1) -> dict[str, Any]:
             "master_key_col": defaults.master_key_col,
             "master_match_col": defaults.master_match_col,
             "fill_blank_only": defaults.fill_blank_only,
+            "allow_blank_write": defaults.allow_blank_write,
             "post_process_enabled": defaults.post_process_enabled,
         }
         for job in config.jobs:
@@ -228,6 +235,7 @@ def to_payload(config: BatchConfigV1) -> dict[str, Any]:
             "master_key_col": defaults.master_key_col,
             "master_match_col": defaults.master_match_col,
             "fill_blank_only": defaults.fill_blank_only,
+            "allow_blank_write": defaults.allow_blank_write,
         }
         for job in config.jobs:
             jobs_payload.append(
@@ -263,6 +271,7 @@ def template_config(mode: str) -> BatchConfigV1:
             master_key_col=2,
             master_match_col=3,
             fill_blank_only=False,
+            allow_blank_write=False,
             post_process_enabled=True,
         )
         jobs = (BatchJobConfig(name="job-1", target_folder="<target_folder_path>", variable_column=4),)
@@ -274,6 +283,7 @@ def template_config(mode: str) -> BatchConfigV1:
             master_key_col=2,
             master_match_col=3,
             fill_blank_only=False,
+            allow_blank_write=False,
         )
         jobs = (BatchJobConfig(name="job-1", target_folder="<target_folder_path>", variable_column=4),)
 
@@ -301,6 +311,7 @@ def _parse_payload(payload: dict[str, Any]) -> BatchConfigV1:
             master_key_col=int(defaults_payload["master_key_col"]),
             master_match_col=int(defaults_payload["master_match_col"]),
             fill_blank_only=bool(defaults_payload["fill_blank_only"]),
+            allow_blank_write=bool(defaults_payload.get("allow_blank_write", False)),
             post_process_enabled=bool(defaults_payload["post_process_enabled"]),
         )
         variable_key = "master_content_start_col"
@@ -312,6 +323,7 @@ def _parse_payload(payload: dict[str, Any]) -> BatchConfigV1:
             master_key_col=int(defaults_payload["master_key_col"]),
             master_match_col=int(defaults_payload["master_match_col"]),
             fill_blank_only=bool(defaults_payload["fill_blank_only"]),
+            allow_blank_write=bool(defaults_payload.get("allow_blank_write", False)),
         )
         variable_key = "master_update_col"
 

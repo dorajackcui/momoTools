@@ -30,6 +30,7 @@ class ReverseExcelProcessor:
         self.master_match_col = 2
         self.master_update_col = 3
         self.fill_blank_only = False
+        self.allow_blank_write = False
 
         self.io_contract = ModeIOContract(
             mode_name="target_to_master_reverse",
@@ -56,6 +57,9 @@ class ReverseExcelProcessor:
 
     def set_fill_blank_only(self, enabled: bool):
         self.fill_blank_only = bool(enabled)
+
+    def set_allow_blank_write(self, enabled: bool):
+        self.allow_blank_write = bool(enabled)
 
     def log(self, message):
         self.log_callback(message)
@@ -147,6 +151,8 @@ class ReverseExcelProcessor:
                             row_values[content_offset] if content_offset < len(row_values) else None,
                             strip=False,
                         )
+                        if (not self.allow_blank_write) and is_blank_value(content_val):
+                            continue
                         local_dict[combined_key] = content_val
                     except IndexError:
                         continue
