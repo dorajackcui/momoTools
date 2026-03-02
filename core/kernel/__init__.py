@@ -2,6 +2,7 @@ from .types import ColumnSpec, ErrorEvent, ModeIOContract, ProcessingStats
 from .excel_io import (
     apply_cell_updates,
     build_combined_key,
+    get_stable_workers_cap,
     is_blank_value,
     iter_excel_files,
     open_workbook,
@@ -19,6 +20,7 @@ __all__ = [
     "ProcessingStats",
     "apply_cell_updates",
     "build_combined_key",
+    "get_stable_workers_cap",
     "is_blank_value",
     "iter_excel_files",
     "open_workbook",

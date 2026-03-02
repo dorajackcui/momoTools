@@ -9,6 +9,10 @@ import openpyxl
 DEFAULT_EXCEL_EXTENSIONS = (".xlsx", ".xls")
 
 
+def get_stable_workers_cap() -> int:
+    return max(2, min(8, os.cpu_count() or 4))
+
+
 def safe_to_str(value: Any, strip: bool = True) -> str:
     if value is None:
         return ""

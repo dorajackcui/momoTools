@@ -1,4 +1,5 @@
 import time
+from threading import Lock
 
 import pandas as pd
 
@@ -9,6 +10,7 @@ from core.kernel import (
     ProcessingStats,
     apply_cell_updates,
     build_combined_key,
+    get_stable_workers_cap,
     is_blank_value,
     iter_excel_files,
     safe_to_str,
@@ -212,17 +214,33 @@ class MultiColumnExcelProcessor:
         self.log(f"找到 {len(file_paths)} 个目标文件")
 
         process_start_time = time.time()
+        workers_cap = get_stable_workers_cap()
+        updated_files = set()
+        updated_files_lock = Lock()
+
+        def worker(file_path):
+            updated_cells = self._process_single_file(file_path, master_dict)
+            if updated_cells > 0:
+                with updated_files_lock:
+                    updated_files.add(file_path)
+            return updated_cells
+
         updated_count = process_files_in_parallel(
             file_paths,
-            lambda fp: self._process_single_file(fp, master_dict),
-            max_workers_cap=32,
+            worker,
+            max_workers_cap=workers_cap,
         )
+        updated_file_paths = [file_path for file_path in file_paths if file_path in updated_files]
         self.log(f"文件处理耗时: {time.time() - process_start_time:.2f}秒")
         self.log(f"处理完成，共更新 {updated_count} 处数据")
 
         if self.post_process_enabled:
             self.log("开始后处理步骤...")
-            self._post_process(file_paths)
+            self.log(f"Post-process files: {len(updated_file_paths)}")
+            if updated_file_paths:
+                self._post_process(updated_file_paths)
+            else:
+                self.log("No updated files, skip post-process.")
             self.log("后处理步骤完成")
         else:
             self.log("后处理已关闭，跳过")
@@ -238,16 +256,31 @@ class MultiColumnExcelProcessor:
         try:
             with open_workbook(file_path, read_only=True) as workbook:
                 worksheet = workbook.active
-                for idx, row in enumerate(worksheet.rows, start=1):
-                    try:
-                        key_cell = row[self.target_key_column_index] if len(row) > self.target_key_column_index else None
-                        match_cell = row[self.match_column_index] if len(row) > self.match_column_index else None
-                        if match_cell is None:
-                            continue
+                required_cols = {
+                    self.target_key_column_index,
+                    self.match_column_index,
+                }
+                if self.fill_blank_only:
+                    required_cols.update(
+                        self.update_start_column_index + i for i in range(self.column_count)
+                    )
 
+                min_col_idx = min(required_cols)
+                max_col_idx = max(required_cols)
+                min_col = min_col_idx + 1
+                max_col = max_col_idx + 1
+                key_offset = self.target_key_column_index - min_col_idx
+                match_offset = self.match_column_index - min_col_idx
+                update_start_offset = self.update_start_column_index - min_col_idx
+
+                for idx, row_values in enumerate(
+                    worksheet.iter_rows(min_col=min_col, max_col=max_col, values_only=True),
+                    start=1,
+                ):
+                    try:
                         combined_key = build_combined_key(
-                            key_cell.value if key_cell else None,
-                            match_cell.value if match_cell else None,
+                            row_values[key_offset] if key_offset < len(row_values) else None,
+                            row_values[match_offset] if match_offset < len(row_values) else None,
                             separator=self.io_contract.key_separator,
                         )
                         if not combined_key or combined_key not in master_dict:
@@ -255,8 +288,11 @@ class MultiColumnExcelProcessor:
 
                         content_values = master_dict[combined_key]
                         for i, content_value in enumerate(content_values):
-                            target_col_index = self.update_start_column_index + i
-                            current_value = row[target_col_index].value if len(row) > target_col_index else None
+                            current_value = (
+                                row_values[update_start_offset + i]
+                                if self.fill_blank_only and (update_start_offset + i) < len(row_values)
+                                else None
+                            )
                             if self.fill_blank_only and (not is_blank_value(current_value)):
                                 continue
                             update_col = self.update_start_column_index + i + 1

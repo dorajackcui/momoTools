@@ -7,6 +7,7 @@ from core.kernel import (
     ModeIOContract,
     ProcessingStats,
     build_combined_key,
+    get_stable_workers_cap,
     is_blank_value,
     iter_excel_files,
     run_parallel_map,
@@ -98,7 +99,12 @@ class ReverseExcelProcessor:
         self.stats.files_total = len(file_paths)
         self.log(f"找到 {len(file_paths)} 个目标文件")
 
-        results = run_parallel_map(file_paths, self._read_single_target_file, max_workers_cap=32)
+        workers_cap = get_stable_workers_cap()
+        results = run_parallel_map(
+            file_paths,
+            self._read_single_target_file,
+            max_workers_cap=workers_cap,
+        )
         data_dict = {}
         for local_dict in results:
             data_dict.update(local_dict)
@@ -107,28 +113,38 @@ class ReverseExcelProcessor:
 
     def _read_single_target_file(self, file_path):
         local_dict = {}
+        required_cols = {
+            self.target_key_col,
+            self.target_match_col,
+            self.target_content_col,
+        }
+        min_col_idx = min(required_cols)
+        max_col_idx = max(required_cols)
+        min_col = min_col_idx + 1
+        max_col = max_col_idx + 1
+        key_offset = self.target_key_col - min_col_idx
+        match_offset = self.target_match_col - min_col_idx
+        content_offset = self.target_content_col - min_col_idx
         try:
             with open_workbook(file_path, read_only=True) as workbook:
                 worksheet = workbook.active
-                for row in worksheet.iter_rows(min_row=2):
+                for row_values in worksheet.iter_rows(
+                    min_row=2,
+                    min_col=min_col,
+                    max_col=max_col,
+                    values_only=True,
+                ):
                     try:
-                        if len(row) <= max(self.target_key_col, self.target_match_col, self.target_content_col):
-                            continue
-
-                        key_cell = row[self.target_key_col]
-                        match_cell = row[self.target_match_col]
-                        content_cell = row[self.target_content_col]
-
                         combined_key = build_combined_key(
-                            key_cell.value if key_cell else None,
-                            match_cell.value if match_cell else None,
+                            row_values[key_offset] if key_offset < len(row_values) else None,
+                            row_values[match_offset] if match_offset < len(row_values) else None,
                             separator=self.io_contract.key_separator,
                         )
                         if not combined_key:
                             continue
 
                         content_val = safe_to_str(
-                            content_cell.value if content_cell else None,
+                            row_values[content_offset] if content_offset < len(row_values) else None,
                             strip=False,
                         )
                         local_dict[combined_key] = content_val
@@ -153,15 +169,24 @@ class ReverseExcelProcessor:
             return 0
 
         updated_count = 0
+        required_cols = {
+            self.master_key_col,
+            self.master_match_col,
+            self.master_update_col,
+        }
+        min_col_idx = min(required_cols)
+        max_col_idx = max(required_cols)
+        min_col = min_col_idx + 1
+        max_col = max_col_idx + 1
+        key_offset = self.master_key_col - min_col_idx
+        match_offset = self.master_match_col - min_col_idx
+        update_offset = self.master_update_col - min_col_idx
         try:
             with open_workbook(self.master_file_path, read_only=False) as workbook:
                 worksheet = workbook.active
-                for row in worksheet.iter_rows():
-                    if len(row) <= max(self.master_key_col, self.master_match_col, self.master_update_col):
-                        continue
-
-                    master_key_cell = row[self.master_key_col]
-                    master_match_cell = row[self.master_match_col]
+                for row in worksheet.iter_rows(min_col=min_col, max_col=max_col):
+                    master_key_cell = row[key_offset] if key_offset < len(row) else None
+                    master_match_cell = row[match_offset] if match_offset < len(row) else None
                     combined_key = build_combined_key(
                         master_key_cell.value if master_key_cell else None,
                         master_match_cell.value if master_match_cell else None,
@@ -171,9 +196,12 @@ class ReverseExcelProcessor:
                         continue
 
                     if combined_key in target_data_dict:
-                        if self.fill_blank_only and (not is_blank_value(row[self.master_update_col].value)):
+                        update_cell = row[update_offset] if update_offset < len(row) else None
+                        if update_cell is None:
                             continue
-                        row[self.master_update_col].value = target_data_dict[combined_key]
+                        if self.fill_blank_only and (not is_blank_value(update_cell.value)):
+                            continue
+                        update_cell.value = target_data_dict[combined_key]
                         updated_count += 1
 
                 if updated_count > 0:

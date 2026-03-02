@@ -1,0 +1,61 @@
+{
+  "timestamp": "2026-03-02T11:18:21",
+  "iterations": 3,
+  "baseline_json": "",
+  "cases": [
+    {
+      "name": "master_to_target_single",
+      "iterations": 3,
+      "durations_s": [
+        0.044570500002009794,
+        0.023170400003436953,
+        0.03226910001831129
+      ],
+      "mean_s": 0.03333666667458601,
+      "min_s": 0.023170400003436953,
+      "max_s": 0.044570500002009794,
+      "last_updated_count": 1,
+      "delta_percent": null,
+      "trend": null,
+      "error": ""
+    },
+    {
+      "name": "master_to_target_multi",
+      "iterations": 3,
+      "durations_s": [
+        0.02352489999611862,
+        0.020027699996717274,
+        0.020607999991625547
+      ],
+      "mean_s": 0.021386866661487147,
+      "min_s": 0.020027699996717274,
+      "max_s": 0.02352489999611862,
+      "last_updated_count": 2,
+      "delta_percent": null,
+      "trend": null,
+      "error": ""
+    },
+    {
+      "name": "target_to_master_reverse",
+      "iterations": 3,
+      "durations_s": [
+        0.021211599989328533,
+        0.023447099985787645,
+        0.02073049999307841
+      ],
+      "mean_s": 0.021796399989398196,
+      "min_s": 0.02073049999307841,
+      "max_s": 0.023447099985787645,
+      "last_updated_count": 1,
+      "delta_percent": null,
+      "trend": null,
+      "error": ""
+    }
+  ],
+  "summary": {
+    "case_count": 3,
+    "improved_cases": [],
+    "regressed_cases": [],
+    "failed_cases": []
+  }
+}

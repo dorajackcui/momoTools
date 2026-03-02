@@ -9,7 +9,7 @@ import openpyxl
 
 from core.deep_replace_processor import DeepReplaceProcessor
 from core.excel_processor import ExcelProcessor
-from core.kernel import run_parallel_map
+from core.kernel import get_stable_workers_cap, run_parallel_map
 from core.multi_column_processor import MultiColumnExcelProcessor
 from core.reverse_excel_processor import ReverseExcelProcessor
 from core.untranslated_stats_processor import UntranslatedStatsProcessor
@@ -108,6 +108,67 @@ class CoreProcessorsRegressionTestCase(unittest.TestCase):
         self.assertEqual(read_cell(target_path, 2, 5), "A1")
         self.assertEqual(read_cell(target_path, 2, 6), "A2")
 
+    def test_single_update_with_sparse_wide_columns(self):
+        master_path = self.root / "master_sparse.xlsx"
+        target_folder = self.root / "targets_sparse_single"
+        target_folder.mkdir()
+        target_path = target_folder / "target_sparse.xlsx"
+
+        master_header = ["id", "key", "match"] + [""] * 17 + ["value"]
+        master_row = ["", "K1", "M1"] + [""] * 17 + ["WIDE_V"]
+        target_header = ["key", "match"] + [""] * 28 + ["translation"]
+        target_row = ["K1", "M1"] + [""] * 28 + ["old"]
+
+        write_workbook(master_path, [master_header, master_row])
+        write_workbook(target_path, [target_header, target_row])
+
+        processor = ExcelProcessor(log_callback=lambda _msg: None)
+        processor.set_master_file(str(master_path))
+        processor.set_target_folder(str(target_folder))
+        processor.set_master_column(1, 2, 20)
+        processor.set_target_column(0, 1, 30)
+        processor.set_post_process_enabled(False)
+        processor.set_fill_blank_only(False)
+
+        updated_count = processor.process_files()
+
+        self.assertEqual(updated_count, 1)
+        self.assertEqual(read_cell(target_path, 2, 31), "WIDE_V")
+
+    def test_multi_column_fill_blank_only_preserves_non_blank_cells(self):
+        master_path = self.root / "master_multi_blank.xlsx"
+        target_folder = self.root / "targets_multi_blank"
+        target_folder.mkdir()
+        target_path = target_folder / "target.xlsx"
+
+        write_workbook(
+            master_path,
+            [
+                ["id", "key", "match", "meta", "v1", "v2"],
+                ["", "K1", "M1", "", "A1", "A2"],
+            ],
+        )
+        write_workbook(
+            target_path,
+            [
+                ["id", "key", "match", "meta", "out1", "out2"],
+                ["", "K1", "M1", "", "", "keep"],
+            ],
+        )
+
+        processor = MultiColumnExcelProcessor(log_callback=lambda _msg: None)
+        processor.set_master_file(str(master_path))
+        processor.set_target_folder(str(target_folder))
+        processor.set_column_count(2)
+        processor.set_post_process_enabled(False)
+        processor.set_fill_blank_only(True)
+
+        updated_count = processor.process_files()
+
+        self.assertEqual(updated_count, 1)
+        self.assertEqual(read_cell(target_path, 2, 5), "A1")
+        self.assertEqual(read_cell(target_path, 2, 6), "keep")
+
     def test_reverse_update_has_deterministic_merge_precedence(self):
         master_path = self.root / "master_reverse.xlsx"
         target_folder = self.root / "targets_reverse"
@@ -144,6 +205,177 @@ class CoreProcessorsRegressionTestCase(unittest.TestCase):
 
         self.assertEqual(updated_count, 1)
         self.assertEqual(read_cell(master_path, 2, 4), "from_b")
+
+    def test_reverse_update_with_sparse_columns(self):
+        master_path = self.root / "master_reverse_sparse.xlsx"
+        target_folder = self.root / "targets_reverse_sparse"
+        target_folder.mkdir()
+        target_path = target_folder / "sparse_target.xlsx"
+
+        master_header = [""] * 26
+        master_header[5] = "key"
+        master_header[15] = "match"
+        master_header[25] = "translation"
+        master_row = [""] * 26
+        master_row[5] = "K1"
+        master_row[15] = "M1"
+
+        target_header = [""] * 21
+        target_header[0] = "key"
+        target_header[10] = "match"
+        target_header[20] = "translation"
+        target_row = [""] * 21
+        target_row[0] = "K1"
+        target_row[10] = "M1"
+        target_row[20] = "from_sparse"
+
+        write_workbook(master_path, [master_header, master_row])
+        write_workbook(target_path, [target_header, target_row])
+
+        processor = ReverseExcelProcessor(log_callback=lambda _msg: None)
+        processor.set_master_file(str(master_path))
+        processor.set_target_folder(str(target_folder))
+        processor.set_target_columns(0, 10, 20)
+        processor.set_master_columns(5, 15, 25)
+
+        updated_count = processor.process_files()
+
+        self.assertEqual(updated_count, 1)
+        self.assertEqual(read_cell(master_path, 2, 26), "from_sparse")
+
+    def test_stable_workers_cap_bounds(self):
+        with patch("core.kernel.excel_io.os.cpu_count", return_value=1):
+            self.assertEqual(get_stable_workers_cap(), 2)
+        with patch("core.kernel.excel_io.os.cpu_count", return_value=64):
+            self.assertEqual(get_stable_workers_cap(), 8)
+
+    def test_processors_use_stable_workers_cap(self):
+        single = ExcelProcessor(log_callback=lambda _msg: None)
+        single.set_master_file("master.xlsx")
+        single.set_target_folder("targets")
+        single.set_post_process_enabled(False)
+        with (
+            patch("core.excel_processor.get_stable_workers_cap", return_value=5),
+            patch.object(single, "_read_master_dict", return_value={}),
+            patch("core.excel_processor.iter_excel_files", return_value=["a.xlsx", "b.xlsx"]),
+            patch("core.excel_processor.process_files_in_parallel", return_value=0) as single_parallel,
+        ):
+            single.process_files()
+        self.assertEqual(single_parallel.call_args.kwargs["max_workers_cap"], 5)
+
+        multi = MultiColumnExcelProcessor(log_callback=lambda _msg: None)
+        multi.set_master_file("master.xlsx")
+        multi.set_target_folder("targets")
+        multi.set_post_process_enabled(False)
+        with (
+            patch("core.multi_column_processor.get_stable_workers_cap", return_value=7),
+            patch.object(multi, "_build_usecols", return_value=[1, 2, 4]),
+            patch.object(multi, "_read_master_dataframe", return_value=[]),
+            patch.object(multi, "_build_master_dict", return_value={}),
+            patch("core.multi_column_processor.iter_excel_files", return_value=["a.xlsx"]),
+            patch("core.multi_column_processor.process_files_in_parallel", return_value=0) as multi_parallel,
+        ):
+            multi.process_files()
+        self.assertEqual(multi_parallel.call_args.kwargs["max_workers_cap"], 7)
+
+        reverse = ReverseExcelProcessor(log_callback=lambda _msg: None)
+        reverse.set_master_file("master.xlsx")
+        reverse.set_target_folder("targets")
+        with (
+            patch("core.reverse_excel_processor.get_stable_workers_cap", return_value=6),
+            patch("core.reverse_excel_processor.iter_excel_files", return_value=["a.xlsx", "b.xlsx"]),
+            patch("core.reverse_excel_processor.run_parallel_map", return_value=[{}, {}]) as reverse_parallel,
+            patch.object(reverse, "_update_master_file", return_value=0),
+        ):
+            reverse.process_files()
+        self.assertEqual(reverse_parallel.call_args.kwargs["max_workers_cap"], 6)
+
+    def test_single_post_process_only_updated_files(self):
+        processor = ExcelProcessor(log_callback=lambda _msg: None)
+        processor.set_master_file("master.xlsx")
+        processor.set_target_folder("targets")
+        processor.set_post_process_enabled(True)
+
+        file_paths = ["a.xlsx", "b.xlsx", "c.xlsx"]
+        updates_by_file = {
+            "a.xlsx": 1,
+            "b.xlsx": 0,
+            "c.xlsx": 2,
+        }
+
+        def fake_parallel(paths, worker, max_workers_cap):
+            return sum(worker(path) for path in paths)
+
+        def fake_process(file_path, _master_dict):
+            return updates_by_file[file_path]
+
+        with (
+            patch.object(processor, "_read_master_dict", return_value={}),
+            patch("core.excel_processor.iter_excel_files", return_value=file_paths),
+            patch.object(processor, "_process_single_file", side_effect=fake_process),
+            patch("core.excel_processor.process_files_in_parallel", side_effect=fake_parallel),
+            patch.object(processor, "_post_process") as post_process_mock,
+        ):
+            updated_count = processor.process_files()
+
+        self.assertEqual(updated_count, 3)
+        post_process_mock.assert_called_once_with(["a.xlsx", "c.xlsx"])
+
+    def test_multi_post_process_only_updated_files(self):
+        processor = MultiColumnExcelProcessor(log_callback=lambda _msg: None)
+        processor.set_master_file("master.xlsx")
+        processor.set_target_folder("targets")
+        processor.set_post_process_enabled(True)
+
+        file_paths = ["a.xlsx", "b.xlsx", "c.xlsx"]
+        updates_by_file = {
+            "a.xlsx": 0,
+            "b.xlsx": 4,
+            "c.xlsx": 0,
+        }
+
+        def fake_parallel(paths, worker, max_workers_cap):
+            return sum(worker(path) for path in paths)
+
+        def fake_process(file_path, _master_dict):
+            return updates_by_file[file_path]
+
+        with (
+            patch.object(processor, "_build_usecols", return_value=[0, 1, 2]),
+            patch.object(processor, "_read_master_dataframe", return_value=[]),
+            patch.object(processor, "_build_master_dict", return_value={}),
+            patch("core.multi_column_processor.iter_excel_files", return_value=file_paths),
+            patch.object(processor, "_process_single_file", side_effect=fake_process),
+            patch("core.multi_column_processor.process_files_in_parallel", side_effect=fake_parallel),
+            patch.object(processor, "_post_process") as post_process_mock,
+        ):
+            updated_count = processor.process_files()
+
+        self.assertEqual(updated_count, 4)
+        post_process_mock.assert_called_once_with(["b.xlsx"])
+
+    def test_single_post_process_skipped_when_no_updates(self):
+        processor = ExcelProcessor(log_callback=lambda _msg: None)
+        processor.set_master_file("master.xlsx")
+        processor.set_target_folder("targets")
+        processor.set_post_process_enabled(True)
+
+        file_paths = ["a.xlsx", "b.xlsx"]
+
+        def fake_parallel(paths, worker, max_workers_cap):
+            return sum(worker(path) for path in paths)
+
+        with (
+            patch.object(processor, "_read_master_dict", return_value={}),
+            patch("core.excel_processor.iter_excel_files", return_value=file_paths),
+            patch.object(processor, "_process_single_file", return_value=0),
+            patch("core.excel_processor.process_files_in_parallel", side_effect=fake_parallel),
+            patch.object(processor, "_post_process") as post_process_mock,
+        ):
+            updated_count = processor.process_files()
+
+        self.assertEqual(updated_count, 0)
+        post_process_mock.assert_not_called()
 
     def test_untranslated_stats_and_export(self):
         target_folder = self.root / "stats_targets"
