@@ -4,7 +4,16 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-from controllers import BatchController, ClearerController, ReverseUpdaterController, UntranslatedStatsController, UpdaterController
+from controllers import (
+    BatchController,
+    ClearerController,
+    MasterMergeController,
+    ReverseUpdaterController,
+    UpdateContentController,
+    UpdateMasterController,
+    UntranslatedStatsController,
+    UpdaterController,
+)
 from core.batch_config import (
     BatchConfigV1,
     BatchDefaultsSingle,
@@ -17,6 +26,16 @@ from core.batch_config import (
 )
 from core.auto_fill_config import AutoFillConfig, AutoFillRule, load_auto_fill_config, save_auto_fill_config
 from core.batch_runner import BatchJobResult, BatchRunSummary
+from core.master_merge_processor import (
+    CELL_WRITE_POLICY_FILL_BLANK_ONLY,
+    CELL_WRITE_POLICY_OVERWRITE_NON_BLANK,
+    KEY_ADMISSION_POLICY_ALLOW_NEW,
+    KEY_ADMISSION_POLICY_EXISTING_ONLY,
+    MasterMergeResult,
+    PRIORITY_WINNER_POLICY_LAST_PROCESSED,
+    ROW_KEY_POLICY_COMBINED,
+    ROW_KEY_POLICY_KEY_ONLY,
+)
 from ui import strings
 from ui.validators import ValidationError
 from ui.view_models import (
@@ -26,6 +45,7 @@ from ui.view_models import (
     BatchRuntimeOptions as BatchRuntimeOptionsView,
     BatchViewConfig,
     ClearerConfig,
+    MergeMastersConfig,
     ReverseConfig,
     StatsConfig,
     UpdaterConfig,
@@ -228,6 +248,72 @@ class FakeClearerProcessor:
     def delete_column_in_files(self):
         self.deleted_called = True
         return 1
+
+
+class FakeMergeFrame:
+    def __init__(self, config):
+        self._config = config
+        self.selected_master = ""
+        self.selected_folder = ""
+        self.priority_files = []
+
+    def set_master_file_label(self, path):
+        self.selected_master = path
+
+    def set_update_folder_label(self, path):
+        self.selected_folder = path
+
+    def set_priority_files(self, file_paths):
+        self.priority_files = list(file_paths)
+
+    def get_config(self):
+        if isinstance(self._config, Exception):
+            raise self._config
+        return self._config
+
+
+class FakeMergeProcessor:
+    def __init__(self):
+        self.master_file = None
+        self.update_folder = None
+        self.columns = None
+        self.priority_files = None
+        self.policies = None
+        self.row_key_policy = None
+        self.listed_files = []
+
+    def set_master_file(self, path):
+        self.master_file = path
+
+    def set_update_folder(self, path):
+        self.update_folder = path
+
+    def set_columns(self, key_col, match_col, last_update_col=None):
+        self.columns = (key_col, match_col, last_update_col)
+
+    def set_priority_files(self, file_paths):
+        self.priority_files = tuple(file_paths)
+
+    def set_policies(self, *, cell_write_policy, key_admission_policy, priority_winner_policy):
+        self.policies = (
+            cell_write_policy,
+            key_admission_policy,
+            priority_winner_policy,
+        )
+
+    def set_row_key_policy(self, row_key_policy):
+        self.row_key_policy = row_key_policy
+
+    def list_update_files(self):
+        return list(self.listed_files)
+
+    def process_files(self):
+        return MasterMergeResult(
+            updated_cells=4,
+            added_rows=2,
+            merged_keys=6,
+            source_files=len(self.priority_files or ()),
+        )
 
 
 class FakeStatsFrame:
@@ -468,6 +554,104 @@ class ControllersTestCase(unittest.TestCase):
         self.assertFalse(processor.fill_blank_only)
         self.assertTrue(processor.allow_blank_write)
         self.assertIn("共更新 3 行。", dialogs.infos[0][1])
+
+    def test_merge_controller_refreshes_priority_files_after_select_folder(self):
+        config = MergeMastersConfig(key_col=1, match_col=2, last_update_col=10, priority_files=("a.xlsx",))
+        frame = FakeMergeFrame(config)
+        processor = FakeMergeProcessor()
+        processor.listed_files = ["C:/tmp/a.xlsx", "C:/tmp/b.xlsx"]
+        controller = MasterMergeController(frame, processor, dialog_service=FakeDialogs())
+
+        with patch("controllers.filedialog.askdirectory", return_value="C:/tmp"):
+            controller.select_update_folder()
+
+        self.assertEqual(controller.update_folder, "C:/tmp")
+        self.assertEqual(processor.update_folder, "C:/tmp")
+        self.assertEqual(frame.priority_files, ["C:/tmp/a.xlsx", "C:/tmp/b.xlsx"])
+
+    def test_merge_controller_process_applies_config_and_reports_summary(self):
+        config = MergeMastersConfig(
+            key_col=0,
+            match_col=1,
+            last_update_col=10,
+            priority_files=("C:/tmp/a.xlsx", "C:/tmp/b.xlsx"),
+            use_combined_key=False,
+        )
+        frame = FakeMergeFrame(config)
+        processor = FakeMergeProcessor()
+        dialogs = FakeDialogs()
+        controller = MasterMergeController(frame, processor, dialog_service=dialogs)
+        controller.master_file_path = "master.xlsx"
+        controller.update_folder = "updates"
+
+        controller.process_files()
+
+        self.assertEqual(processor.columns, (0, 1, 10))
+        self.assertEqual(processor.priority_files, ("C:/tmp/a.xlsx", "C:/tmp/b.xlsx"))
+        self.assertEqual(
+            processor.policies,
+            (
+                CELL_WRITE_POLICY_FILL_BLANK_ONLY,
+                KEY_ADMISSION_POLICY_ALLOW_NEW,
+                PRIORITY_WINNER_POLICY_LAST_PROCESSED,
+            ),
+        )
+        self.assertEqual(processor.row_key_policy, ROW_KEY_POLICY_KEY_ONLY)
+        self.assertTrue(dialogs.infos)
+        self.assertIn("Updated cells: 4", dialogs.infos[0][1])
+        self.assertIn("Overwritten cells: 0", dialogs.infos[0][1])
+
+    def test_update_master_controller_uses_overwrite_allow_new_policies(self):
+        config = MergeMastersConfig(
+            key_col=0,
+            match_col=1,
+            last_update_col=10,
+            priority_files=("C:/tmp/a.xlsx",),
+        )
+        frame = FakeMergeFrame(config)
+        processor = FakeMergeProcessor()
+        dialogs = FakeDialogs()
+        controller = UpdateMasterController(frame, processor, dialog_service=dialogs)
+        controller.master_file_path = "master.xlsx"
+        controller.update_folder = "updates"
+
+        controller.process_files()
+
+        self.assertEqual(
+            processor.policies,
+            (
+                CELL_WRITE_POLICY_OVERWRITE_NON_BLANK,
+                KEY_ADMISSION_POLICY_ALLOW_NEW,
+                PRIORITY_WINNER_POLICY_LAST_PROCESSED,
+            ),
+        )
+        self.assertEqual(processor.row_key_policy, ROW_KEY_POLICY_KEY_ONLY)
+
+    def test_update_content_controller_uses_overwrite_existing_only_policies(self):
+        config = MergeMastersConfig(
+            key_col=0,
+            match_col=1,
+            last_update_col=10,
+            priority_files=("C:/tmp/a.xlsx",),
+        )
+        frame = FakeMergeFrame(config)
+        processor = FakeMergeProcessor()
+        dialogs = FakeDialogs()
+        controller = UpdateContentController(frame, processor, dialog_service=dialogs)
+        controller.master_file_path = "master.xlsx"
+        controller.update_folder = "updates"
+
+        controller.process_files()
+
+        self.assertEqual(
+            processor.policies,
+            (
+                CELL_WRITE_POLICY_OVERWRITE_NON_BLANK,
+                KEY_ADMISSION_POLICY_EXISTING_ONLY,
+                PRIORITY_WINNER_POLICY_LAST_PROCESSED,
+            ),
+        )
+        self.assertEqual(processor.row_key_policy, ROW_KEY_POLICY_COMBINED)
 
     def test_clearer_delete_requires_confirm(self):
         frame = FakeClearerFrame(ClearerConfig(column_number=5))

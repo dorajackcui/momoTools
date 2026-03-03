@@ -43,7 +43,7 @@ class AppSmokeTestCase(unittest.TestCase):
 
         self.assertIsNotNone(instance)
         root.title.assert_called_once_with("Momo build your mastersheet")
-        root.geometry.assert_called_once_with("540x680")
+        root.geometry.assert_called_once_with("540x700")
         root.minsize.assert_called_once_with(520, 640)
         root.resizable.assert_called_once_with(True, True)
         notebook.pack.assert_called_once()
@@ -71,6 +71,7 @@ class AppSmokeTestCase(unittest.TestCase):
         instance.clearer = object()
         instance.compatibility_processor = object()
         instance.deep_replace_processor = object()
+        instance.master_merge_processor = object()
         instance.untranslated_stats_processor = object()
         instance.terminology_processor = object()
         instance.task_runner = object()
@@ -79,7 +80,19 @@ class AppSmokeTestCase(unittest.TestCase):
 
         self.assertEqual(
             [spec.group for spec in specs],
-            ["main", "main", "main", "utilities", "utilities", "utilities", "utilities", "utilities"],
+            [
+                "main",
+                "main",
+                "main",
+                "utilities",
+                "utilities",
+                "utilities",
+                "utilities",
+                "utilities",
+                "update_master",
+                "update_master",
+                "update_master",
+            ],
         )
         self.assertEqual(
             [spec.tab_text for spec in specs],
@@ -92,6 +105,9 @@ class AppSmokeTestCase(unittest.TestCase):
                 "Deep Replace",
                 "Untranslated Stats",
                 "Term Extractor",
+                "Merge",
+                "Apply Updates",
+                "Update Existing",
             ],
         )
         self.assertNotIn("Multi Column", [spec.tab_text for spec in specs])

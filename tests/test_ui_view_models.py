@@ -1,7 +1,15 @@
 import dataclasses
 import unittest
 
-from ui.view_models import ClearerConfig, MultiColumnConfig, ReverseConfig, StatsConfig, UpdaterConfig
+from ui.view_models import (
+    ClearerConfig,
+    MasterUpdateConfig,
+    MergeMastersConfig,
+    MultiColumnConfig,
+    ReverseConfig,
+    StatsConfig,
+    UpdaterConfig,
+)
 
 
 class ViewModelsTestCase(unittest.TestCase):
@@ -49,9 +57,20 @@ class ViewModelsTestCase(unittest.TestCase):
     def test_other_configs(self):
         reverse = ReverseConfig(0, 1, 2, 1, 2, 3, False, allow_blank_write=True)
         clearer = ClearerConfig(5)
+        master_update = MasterUpdateConfig(key_col=1, match_col=2, priority_files=("a.xlsx", "b.xlsx"))
+        merge = MergeMastersConfig(
+            key_col=1,
+            match_col=2,
+            priority_files=("a.xlsx", "b.xlsx"),
+            use_combined_key=False,
+        )
         self.assertEqual(reverse.master_update_col, 3)
         self.assertTrue(reverse.allow_blank_write)
         self.assertEqual(clearer.column_number, 5)
+        self.assertEqual(master_update.priority_files[0], "a.xlsx")
+        self.assertEqual(master_update.last_update_col, 10)
+        self.assertEqual(merge.priority_files[0], "a.xlsx")
+        self.assertFalse(merge.use_combined_key)
 
 
 if __name__ == "__main__":

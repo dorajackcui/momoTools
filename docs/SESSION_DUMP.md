@@ -14,6 +14,7 @@ Desktop Tkinter toolset for Excel localization workflows:
 3. Batch orchestration for single/reverse update modes
 4. Utilities: column clear, compatibility save, deep replace, untranslated stats
 5. Terminology extraction from rule config JSON
+6. Update Master suite (merge/update/content)
 
 ## 2) Runtime Constraints
 
@@ -40,6 +41,11 @@ Top-level notebook groups:
 - `Untranslated Stats`
 - `Term Extractor`
 
+3. `Update Master`
+- `Merge Masters` (`MasterMergeController`)
+- `Update Master` (`UpdateMasterController`)
+- `Update Content` (`UpdateContentController`)
+
 ## 4) Task Model
 
 1. Controllers dispatch processing through `TaskRunner`.
@@ -62,6 +68,24 @@ Top-level notebook groups:
 3. Reverse merge order is deterministic (sorted target file paths, later overrides earlier).
 4. Terminology extractor pipeline: extract -> normalize/dedup -> relation/review -> export.
 5. Terminology output sheets: `terms_summary`, `relations_summary`, `review`, `details`.
+6. Update Master modes use one processor with policy combinations:
+- `Merge Masters`: fill blank only + allow new key
+- `Update Master`: overwrite with non-blank values + allow new key
+- `Update Content`: overwrite with non-blank values + existing key only
+7. Row-key strategy split:
+- `Merge Masters`: UI toggle for `combined_key` (default) vs `key_only`
+- `Update Master`: fixed `key_only`; `match` column is updatable content
+- `Update Content`: fixed `combined_key`; requires key+match hit
+8. Update Master suite emits stage timing summaries:
+- `collect_sources`
+- `scan_master_ro`
+- `plan_updates`
+- `open_master_rw_apply`
+- `save_master`
+- `total`
+9. Update Master suite column scope:
+- shared `last_update_col` for all three modes (applies to both master and source)
+- default UI value is `K` (1-based column 11)
 
 ## 7) Session Entry Checklist
 

@@ -10,6 +10,7 @@ Does not own: UI workflow and architecture decisions
 1. `master -> target (single)` in `core/excel_processor.py`
 2. `master -> target (multi)` in `core/multi_column_processor.py`
 3. `target -> master (reverse)` in `core/reverse_excel_processor.py`
+4. `master update suite` in `core/master_merge_processor.py`
 
 ## 2) Shared Value Rules (`core/kernel/excel_io.py`)
 
@@ -74,6 +75,45 @@ False for: `0`, `0.0`, `float('nan')`, `"nan"`.
 4. `fill_blank_only` checks master destination cell.
 5. Blank content handling follows `allow_blank_write`.
 6. Merge order is deterministic: sorted path order, later file overrides earlier.
+
+### 3.4 Master update suite (shared engine)
+
+1. Inputs:
+- one master file
+- one update folder with multiple files (same headers)
+- `key_col`, `match_col`
+- `last_update_col` (shared upper bound for both master and source scanning; default is column K / 1-based 11)
+- source priority order (top is processed first)
+2. Row identity can be policy-driven:
+- `combined_key`: `key + '|' + match` after normalization, both must be non-blank
+- `key_only`: normalized `key` only, `match` can be blank
+3. Only non-blank source cells are considered update candidates.
+4. Modes and policies:
+- `Merge Masters`: `fill_blank_only + allow_new_key`; key policy is UI-selectable (default `combined_key`)
+- `Update Master`: `overwrite with non-blank values` (`overwrite_non_blank`) + `allow_new_key`; key policy is fixed `key_only`
+- `Update Content`: `overwrite with non-blank values` (`overwrite_non_blank`) + `existing_key_only`; key policy is fixed `combined_key`
+5. Match-column write behavior:
+- In `key_only` modes (`Merge Masters` when toggled, and `Update Master`), `match_col` is treated as content and can be updated.
+- In `combined_key` modes, `match_col` is reserved for matching and excluded from content update columns.
+6. Priority winner in overwrite modes:
+- `last_processed` (later processed file overrides earlier processed file)
+7. New key handling:
+- `allow_new_key`: append as new row
+- `existing_key_only`: skip new key and count as skipped
+8. Duplicate keys in master:
+- all duplicate rows for the same key are synchronized to the merged value
+
+### 3.5 Performance Notes (No Behavior Change)
+
+For `Update Master` and `Update Content`:
+
+1. Source candidates are aggregated first.
+2. Master scan uses read-only planning.
+3. Read-write workbook open/save is skipped when planned updates and new rows are both empty.
+4. Candidate touched columns are tracked to avoid full content-column loops on matched rows.
+5. Stage timing summary is logged for observability.
+
+These are implementation optimizations only; merge semantics remain unchanged.
 
 ## 4) Special-Value Matrix
 

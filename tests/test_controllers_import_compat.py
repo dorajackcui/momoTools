@@ -22,6 +22,22 @@ class ControllersImportCompatTestCase(unittest.TestCase):
             controller_modules.DeepReplaceController,
         )
         self.assertIs(
+            controllers.BaseMasterUpdateController,
+            controller_modules.BaseMasterUpdateController,
+        )
+        self.assertIs(
+            controllers.MasterMergeController,
+            controller_modules.MasterMergeController,
+        )
+        self.assertIs(
+            controllers.UpdateMasterController,
+            controller_modules.UpdateMasterController,
+        )
+        self.assertIs(
+            controllers.UpdateContentController,
+            controller_modules.UpdateContentController,
+        )
+        self.assertIs(
             controllers.MultiColumnController,
             controller_modules.MultiColumnController,
         )

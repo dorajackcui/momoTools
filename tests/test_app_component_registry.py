@@ -1,4 +1,5 @@
 import unittest
+from contextlib import ExitStack
 from unittest.mock import MagicMock, patch
 
 import app
@@ -42,6 +43,18 @@ class RecordingCompatibilityController(RecordingController):
 
 
 class RecordingDeepReplaceController(RecordingController):
+    instances = []
+
+
+class RecordingMasterMergeController(RecordingController):
+    instances = []
+
+
+class RecordingUpdateMasterController(RecordingController):
+    instances = []
+
+
+class RecordingUpdateContentController(RecordingController):
     instances = []
 
 
@@ -93,6 +106,18 @@ class RecordingDeepReplaceFrame(RecordingFrame):
     instances = []
 
 
+class RecordingMasterMergeFrame(RecordingFrame):
+    instances = []
+
+
+class RecordingUpdateMasterFrame(RecordingFrame):
+    instances = []
+
+
+class RecordingUpdateContentFrame(RecordingFrame):
+    instances = []
+
+
 class RecordingStatsFrame(RecordingFrame):
     instances = []
 
@@ -110,6 +135,9 @@ class AppComponentRegistryTestCase(unittest.TestCase):
             RecordingClearerController,
             RecordingCompatibilityController,
             RecordingDeepReplaceController,
+            RecordingMasterMergeController,
+            RecordingUpdateMasterController,
+            RecordingUpdateContentController,
             RecordingStatsController,
             RecordingTerminologyController,
             RecordingUpdaterFrame,
@@ -118,6 +146,9 @@ class AppComponentRegistryTestCase(unittest.TestCase):
             RecordingClearerFrame,
             RecordingCompatibilityFrame,
             RecordingDeepReplaceFrame,
+            RecordingMasterMergeFrame,
+            RecordingUpdateMasterFrame,
+            RecordingUpdateContentFrame,
             RecordingStatsFrame,
             RecordingTerminologyFrame,
         ]:
@@ -132,39 +163,58 @@ class AppComponentRegistryTestCase(unittest.TestCase):
         instance.clearer = object()
         instance.compatibility_processor = object()
         instance.deep_replace_processor = object()
+        instance.master_merge_processor = object()
         instance.untranslated_stats_processor = object()
         instance.terminology_processor = object()
         instance.task_runner = object()
 
         main_group_frame = MagicMock(name="main_group_frame")
         utilities_group_frame = MagicMock(name="utilities_group_frame")
+        update_master_group_frame = MagicMock(name="update_master_group_frame")
         main_notebook = MagicMock(name="main_notebook")
         utilities_notebook = MagicMock(name="utilities_notebook")
+        update_master_notebook = MagicMock(name="update_master_notebook")
 
-        with patch("app.ttk.Frame", side_effect=[main_group_frame, utilities_group_frame]), patch(
-            "app.ttk.Notebook", side_effect=[main_notebook, utilities_notebook]
-        ), patch("app.UpdaterController", RecordingUpdaterController), patch(
-            "app.ReverseUpdaterController", RecordingReverseController
-        ), patch("app.BatchController", RecordingBatchController), patch(
-            "app.BatchFrame", RecordingBatchFrame
-        ), patch("app.ClearerController", RecordingClearerController), patch(
-            "app.CompatibilityController", RecordingCompatibilityController
-        ), patch("app.DeepReplaceController", RecordingDeepReplaceController), patch(
-            "app.UntranslatedStatsController", RecordingStatsController
-        ), patch("app.TerminologyExtractorController", RecordingTerminologyController), patch(
-            "app.UpdaterFrame", RecordingUpdaterFrame
-        ), patch("app.ReverseUpdaterFrame", RecordingReverseFrame), patch(
-            "app.ClearerFrame", RecordingClearerFrame
-        ), patch("app.CompatibilityFrame", RecordingCompatibilityFrame), patch(
-            "app.DeepReplaceFrame", RecordingDeepReplaceFrame
-        ), patch("app.UntranslatedStatsFrame", RecordingStatsFrame), patch(
-            "app.TerminologyExtractorFrame", RecordingTerminologyFrame
-        ):
+        with ExitStack() as stack:
+            stack.enter_context(
+                patch(
+                    "app.ttk.Frame",
+                    side_effect=[main_group_frame, utilities_group_frame, update_master_group_frame],
+                )
+            )
+            stack.enter_context(
+                patch(
+                    "app.ttk.Notebook",
+                    side_effect=[main_notebook, utilities_notebook, update_master_notebook],
+                )
+            )
+            stack.enter_context(patch("app.UpdaterController", RecordingUpdaterController))
+            stack.enter_context(patch("app.ReverseUpdaterController", RecordingReverseController))
+            stack.enter_context(patch("app.BatchController", RecordingBatchController))
+            stack.enter_context(patch("app.BatchFrame", RecordingBatchFrame))
+            stack.enter_context(patch("app.ClearerController", RecordingClearerController))
+            stack.enter_context(patch("app.CompatibilityController", RecordingCompatibilityController))
+            stack.enter_context(patch("app.DeepReplaceController", RecordingDeepReplaceController))
+            stack.enter_context(patch("app.MasterMergeController", RecordingMasterMergeController))
+            stack.enter_context(patch("app.UpdateMasterController", RecordingUpdateMasterController))
+            stack.enter_context(patch("app.UpdateContentController", RecordingUpdateContentController))
+            stack.enter_context(patch("app.UntranslatedStatsController", RecordingStatsController))
+            stack.enter_context(patch("app.TerminologyExtractorController", RecordingTerminologyController))
+            stack.enter_context(patch("app.UpdaterFrame", RecordingUpdaterFrame))
+            stack.enter_context(patch("app.ReverseUpdaterFrame", RecordingReverseFrame))
+            stack.enter_context(patch("app.ClearerFrame", RecordingClearerFrame))
+            stack.enter_context(patch("app.CompatibilityFrame", RecordingCompatibilityFrame))
+            stack.enter_context(patch("app.DeepReplaceFrame", RecordingDeepReplaceFrame))
+            stack.enter_context(patch("app.MergeMastersFrame", RecordingMasterMergeFrame))
+            stack.enter_context(patch("app.UpdateMasterFrame", RecordingUpdateMasterFrame))
+            stack.enter_context(patch("app.UpdateContentFrame", RecordingUpdateContentFrame))
+            stack.enter_context(patch("app.UntranslatedStatsFrame", RecordingStatsFrame))
+            stack.enter_context(patch("app.TerminologyExtractorFrame", RecordingTerminologyFrame))
             instance.init_components()
 
         self.assertEqual(
             [call.kwargs["text"] for call in instance.notebook.add.call_args_list],
-            ["Main Tools", "Utilities"],
+            ["Main Tools", "Utilities", "Master Update"],
         )
         self.assertEqual(
             [call.kwargs["text"] for call in main_notebook.add.call_args_list],
@@ -173,6 +223,10 @@ class AppComponentRegistryTestCase(unittest.TestCase):
         self.assertEqual(
             [call.kwargs["text"] for call in utilities_notebook.add.call_args_list],
             ["Column Clear", "Compatibility", "Deep Replace", "Untranslated Stats", "Term Extractor"],
+        )
+        self.assertEqual(
+            [call.kwargs["text"] for call in update_master_notebook.add.call_args_list],
+            ["Merge", "Apply Updates", "Update Existing"],
         )
 
         self.assertEqual(len(RecordingUpdaterController.instances), 1)
@@ -204,6 +258,33 @@ class AppComponentRegistryTestCase(unittest.TestCase):
         self.assertEqual(len(RecordingDeepReplaceController.instances), 1)
         self.assertIs(
             RecordingDeepReplaceController.instances[0].kwargs["task_runner"],
+            instance.task_runner,
+        )
+        self.assertEqual(len(RecordingMasterMergeController.instances), 1)
+        self.assertIs(
+            RecordingMasterMergeController.instances[0].args[0],
+            instance.master_merge_processor,
+        )
+        self.assertIs(
+            RecordingMasterMergeController.instances[0].kwargs["task_runner"],
+            instance.task_runner,
+        )
+        self.assertEqual(len(RecordingUpdateMasterController.instances), 1)
+        self.assertIs(
+            RecordingUpdateMasterController.instances[0].args[0],
+            instance.master_merge_processor,
+        )
+        self.assertIs(
+            RecordingUpdateMasterController.instances[0].kwargs["task_runner"],
+            instance.task_runner,
+        )
+        self.assertEqual(len(RecordingUpdateContentController.instances), 1)
+        self.assertIs(
+            RecordingUpdateContentController.instances[0].args[0],
+            instance.master_merge_processor,
+        )
+        self.assertIs(
+            RecordingUpdateContentController.instances[0].kwargs["task_runner"],
             instance.task_runner,
         )
         self.assertEqual(len(RecordingStatsController.instances), 1)

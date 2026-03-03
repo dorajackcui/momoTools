@@ -12,8 +12,11 @@ from controllers import (
     ClearerController,
     CompatibilityController,
     DeepReplaceController,
+    MasterMergeController,
     ReverseUpdaterController,
     TerminologyExtractorController,
+    UpdateContentController,
+    UpdateMasterController,
     UntranslatedStatsController,
     UpdaterController,
 )
@@ -23,6 +26,7 @@ from core.excel_compatibility_processor import ExcelCompatibilityProcessor
 from core.excel_processor import ExcelProcessor
 from core.multi_column_processor import MultiColumnExcelProcessor
 from core.reverse_excel_processor import ReverseExcelProcessor
+from core.master_merge_processor import MasterMergeProcessor
 from core.terminology import TerminologyProcessor
 from core.untranslated_stats_processor import UntranslatedStatsProcessor
 from controller_modules.task_runner import TkSingleTaskRunner
@@ -33,9 +37,12 @@ from ui.views import (
     ClearerFrame,
     CompatibilityFrame,
     DeepReplaceFrame,
+    MergeMastersFrame,
     ReverseUpdaterFrame,
     TerminologyExtractorFrame,
     UntranslatedStatsFrame,
+    UpdateContentFrame,
+    UpdateMasterFrame,
     UpdaterFrame,
 )
 
@@ -101,6 +108,7 @@ class ExcelUpdaterApp:
         self.multi_processor = MultiColumnExcelProcessor(self._emit_log)
         self.deep_replace_processor = DeepReplaceProcessor(self._emit_log)
         self.reverse_excel_processor = ReverseExcelProcessor(self._emit_log)
+        self.master_merge_processor = MasterMergeProcessor(self._emit_log)
         self.untranslated_stats_processor = UntranslatedStatsProcessor(self._emit_log)
         self.terminology_processor = TerminologyProcessor(self._emit_log)
 
@@ -177,19 +185,52 @@ class ExcelUpdaterApp:
                 frame_cls=TerminologyExtractorFrame,
                 after_mount=lambda controller: controller.restore_persisted_paths(),
             ),
+            ToolSpec(
+                group="update_master",
+                tab_text="Merge",
+                controller_factory=lambda app: MasterMergeController(
+                    None,
+                    app.master_merge_processor,
+                    task_runner=app.task_runner,
+                ),
+                frame_cls=MergeMastersFrame,
+            ),
+            ToolSpec(
+                group="update_master",
+                tab_text="Apply Updates",
+                controller_factory=lambda app: UpdateMasterController(
+                    None,
+                    app.master_merge_processor,
+                    task_runner=app.task_runner,
+                ),
+                frame_cls=UpdateMasterFrame,
+            ),
+            ToolSpec(
+                group="update_master",
+                tab_text="Update Existing",
+                controller_factory=lambda app: UpdateContentController(
+                    None,
+                    app.master_merge_processor,
+                    task_runner=app.task_runner,
+                ),
+                frame_cls=UpdateContentFrame,
+            ),
         ]
 
     def init_components(self):
         top_group_frames = {
             "main": ttk.Frame(self.notebook),
             "utilities": ttk.Frame(self.notebook),
+            "update_master": ttk.Frame(self.notebook),
         }
         self.notebook.add(top_group_frames["main"], text="Main Tools")
         self.notebook.add(top_group_frames["utilities"], text="Utilities")
+        self.notebook.add(top_group_frames["update_master"], text="Master Update")
 
         group_notebooks = {
             "main": ttk.Notebook(top_group_frames["main"], takefocus=False),
             "utilities": ttk.Notebook(top_group_frames["utilities"], takefocus=False),
+            "update_master": ttk.Notebook(top_group_frames["update_master"], takefocus=False),
         }
         for notebook in group_notebooks.values():
             notebook.pack(expand=True, fill="both", padx=6, pady=6)

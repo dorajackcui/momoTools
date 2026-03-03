@@ -54,6 +54,18 @@ class ClearerConfig:
     column_number: int
 
 
+@dataclass(frozen=True)
+class MasterUpdateConfig:
+    key_col: int
+    match_col: int
+    priority_files: tuple[str, ...]
+    last_update_col: int = 10
+    use_combined_key: bool = True
+
+# Backward compatibility for early Merge Masters rollout.
+MergeMastersConfig = MasterUpdateConfig
+
+
 BatchMode = Literal["master_to_target_single", "target_to_master_reverse"]
 
 
