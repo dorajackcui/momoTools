@@ -1,9 +1,8 @@
 # Troubleshooting Guide
 
-Last updated: 2026-02-28
+Last updated: 2026-03-03
 Audience: operators, QA, and agents diagnosing runtime issues
-Purpose: provide quick diagnosis paths and actionable checks
-Out of scope: architecture rationale and business policy decisions
+Owns: operational diagnosis playbook
 
 ## 1) No files processed or unexpected zero updates
 
@@ -88,34 +87,22 @@ Checks:
 1. Compare multiple local runs to account for machine variance.
 2. Treat large consistent deltas as investigation candidates.
 
-## 7) Quick command set
+## 7) Blank source values do not clear target/master
 
-Syntax smoke:
+Symptoms:
 
-```bash
-python -m py_compile app.py controllers.py ui_components.py
-```
+1. Matched rows are found, but blank source content does not clear existing cell values.
 
-Full unit tests:
+Checks:
 
-```bash
-python -m unittest discover -s tests -p "test_*.py"
-```
+1. Verify `Allow blank write` is enabled for the current tool.
+2. Confirm `fill_blank_only` behavior is not the actual blocker for the target cell.
 
-Unified regression:
+Notes:
 
-```bash
-python scripts/run_regression_suite.py --with-golden
-```
+1. Default policy is `allow_blank_write=False` (skip blank content write).
+2. Set `allow_blank_write=True` to allow blank values to clear matched cells.
 
-Unified regression + perf report:
+## 8) Command Reference
 
-```bash
-python scripts/run_regression_suite.py --with-golden --with-perf
-```
-
-Encoding guardrail for docs:
-
-```bash
-python scripts/check_text_encoding.py --root docs
-```
+Use canonical commands in `docs/README.md` to avoid command drift.

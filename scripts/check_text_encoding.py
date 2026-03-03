@@ -75,6 +75,9 @@ def main() -> int:
     decode_issues: list[Path] = []
 
     for path in iter_repo_files(root):
+        if not path.exists():
+            # The worktree may contain staged/unstaged deletions while docs are being refactored.
+            continue
         raw = path.read_bytes()
         if raw.startswith(b"\xef\xbb\xbf"):
             utf8_bom_issues.append(path)

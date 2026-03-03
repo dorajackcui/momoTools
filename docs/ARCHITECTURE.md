@@ -1,110 +1,115 @@
-# Architecture Overview
+# Architecture (Canonical)
 
-Last updated: 2026-02-28
-Audience: agents and engineers who need project-level design context
-Purpose: provide stable design principles, layering rules, and change boundaries
-Out of scope: temporary run snapshots, pending business policy decisions, detailed IO edge-case tables
+Last updated: 2026-03-03
+Audience: agents and engineers
+Owns: stable design boundaries and compatibility contracts
+Does not own: runtime snapshot and IO edge semantics
 
-## 1) Project Goals And Non-goals
+## 1) Design Goals
 
-### Goals
+1. Keep Excel localization workflows stable while improving maintainability.
+2. Preserve existing behavior unless an explicit business-rule change is approved.
+3. Keep legacy entrypoints/imports compatible.
 
-1. Keep Excel localization workflows reliable and maintainable.
-2. Preserve existing business behavior while improving structure, testability, and observability.
-3. Provide a stable compatibility surface for existing entrypoints and imports.
+## 2) Layer Boundaries
 
-### Non-goals
+1. UI layer (`ui/views`, `ui/widgets`, `ui/theme`, `ui/strings`)
+- Handles layout, widget interaction, and view state.
+- Must not contain Excel business logic.
 
-1. No silent business-rule rewrites under maintainability tasks.
-2. No breaking change to public entrypoints for app startup and legacy imports.
-3. No heavy tooling expansion as a prerequisite for normal development.
+2. Controller layer (`controller_modules`, `controllers.py` facade)
+- Handles validation, processor binding, task scheduling, success/error UX.
+- `controllers.py` is compatibility facade, not primary feature implementation.
 
-## 2) Layered Architecture
+3. Core layer (`core/*`)
+- Handles Excel business logic and processing semantics.
+- Exposes stable processor classes and setter methods consumed by controllers/tests.
 
-### UI layer (`ui/views`, `ui/widgets`, `ui/theme`, `ui/strings`)
+4. Shared internals (`core/kernel`, `core/pipeline`)
+- Kernel: IO/value/error primitives.
+- Pipeline: reusable execution blocks.
 
-1. Owns widget layout, user interaction, and view-level configuration input.
-2. Must not contain Excel business logic.
+## 3) Dependency Rules
 
-### Controller layer (`controller_modules`, `controllers.py` facade)
+Allowed:
 
-1. Owns orchestration: validation, processor parameter binding, task scheduling, success/error UX.
-2. `BaseController` centralizes shared execution helpers.
-3. `TaskRunner` abstraction decouples controller behavior from sync/async execution policy.
+1. `ui -> controller_modules`
+2. `controller_modules -> core`
+3. `core -> core/kernel`, `core/pipeline`
 
-### Core processor layer (`core/*`)
+Not allowed:
 
-1. Owns Excel read/match/update logic and mode-specific business behavior.
-2. Exposes stable processor classes and setter APIs used by controllers.
-3. Must remain business-rule stable unless explicitly approved.
+1. `core` importing UI/controller modules
+2. `ui` calling processors directly
+3. New behavior implemented only in `controllers.py`
 
-### Kernel and pipeline layer (`core/kernel`, `core/pipeline`)
+## 4) Runtime Contract
 
-1. Kernel provides shared primitives: IO contracts, workbook helpers, error/event structures.
-2. Pipeline provides reusable execution flow blocks (parallel execution, post-process helpers).
-3. These modules support deduplication across processors without changing mode semantics.
+1. Tk UI updates stay on main thread.
+2. Processing tasks run via `TkSingleTaskRunner` worker thread.
+3. Completion callbacks return to UI via `root.after(...)`.
+4. Single-task lock blocks concurrent processing actions.
+5. Cancellation is not supported currently.
 
-## 3) Dependency Direction And Boundaries
+## 5) Observability Contract
 
-Allowed dependency direction:
+1. Processors emit logs via `log_callback`.
+2. Structured failures are emitted through `EventLogger`.
+3. App log bus (queue + periodic drain) feeds status line and log window.
+4. Task status uses `Running`, `Done`, `Failed`.
 
-1. `ui` -> `controller_modules`
-2. `controller_modules` -> `core`
-3. `core` -> `core/kernel` and `core/pipeline`
+## 6) Compatibility Surface (Stable)
 
-Disallowed patterns:
+1. `app.py` entrypoint behavior
+2. `controllers.py` exported symbols (`filedialog` included)
+3. `ui_components.py` compatibility exports
+4. Existing processor class names and setter method names
 
-1. `core` importing UI or controller modules.
-2. `ui` bypassing controllers to call processors directly.
-3. New features implemented only in `controllers.py` compatibility facade.
+## 7) Refactor Guardrails
 
-## 4) Runtime Model
+### Frozen contracts
 
-1. Tk main thread owns all widget updates (main thread / UI thread).
-2. `TkSingleTaskRunner` executes processor actions on a worker thread.
-3. Completion callbacks are marshaled back through `root.after(...)`.
-4. Single-task global lock prevents concurrent processing actions.
-5. During processing, only controls marked as processing actions are disabled.
+1. Processor decision semantics stay unchanged:
+- key/match behavior
+- fill mode (`overwrite`, `fill_blank_only`)
+- blank write policy (`allow_blank_write`)
+- mode default columns
+2. Public compatibility surfaces in this doc stay unchanged unless explicitly approved.
+3. IO contract remains owned by `docs/IO_FORMAT_REQUIREMENTS.md`.
 
-## 5) Observability Model
+### Allowed changes
 
-1. Processors emit runtime messages through `log_callback`.
-2. `EventLogger` emits structured error lines with mode and code context.
-3. App-level log bus (`queue` + periodic drain) feeds:
-- status bar summary
-- optional log window (`View Logs` -> `LogWindow`)
-4. Task state messages use `Running/Done/Failed` and remain visible even when logs are active.
+1. Code deduplication and module extraction.
+2. Scheduling/task-runner internal improvements.
+3. Observability/logging plumbing improvements.
+4. Test coverage expansion (unit/golden/private fixture tests).
+5. Deterministic processing and merge-order hardening.
 
-## 6) Compatibility Contract
+### Disallowed changes
 
-The following contracts are treated as stable public surfaces:
+1. Silent business-rule changes.
+2. User-visible breaking interaction changes without explicit migration.
+3. Breaking imports or entry symbols used by current code/tests.
 
-1. `app.py` app entrypoint behavior.
-2. `controllers.py` facade exports and `filedialog` compatibility symbol.
-3. `ui_components.py` compatibility export behavior.
-4. Existing processor class names and setter method names used by controllers/tests.
+### Required regression gate
 
-## 7) Change Policy
+```bash
+python scripts/run_regression_suite.py --with-golden
+```
 
-### Required update path
+Optional diagnostics (non-gating):
 
-1. Controller behavior changes: edit `controller_modules/*` first.
-2. Keep `controllers.py` as compatibility facade, not primary implementation.
-3. If core behavior changes, explicitly classify as either:
-- structural refactor only, or
-- business-rule change (requires explicit approval and regression expansion).
+```bash
+python scripts/run_perf_baseline.py
+python -m unittest tests.test_private_data_skip_blank_write -v
+```
 
-### Documentation sync checklist (triggered by relevant code changes)
+## 8) Doc Routing Rules
 
-1. Stable design changes -> update this file (`docs/ARCHITECTURE.md`).
-2. Current runtime/feature snapshot changes -> update `docs/SESSION_DUMP.md`.
-3. Refactor boundary changes -> update `docs/refactor_baseline.md`.
-4. IO semantics changes -> update `docs/IO_FORMAT_REQUIREMENTS.md`.
-5. Pending policy decisions only -> update `docs/memo_pending_translation_rules.md`.
+When behavior changes, update only the owning doc:
 
-### Validation checklist after meaningful changes
-
-1. `python scripts/check_text_encoding.py --root docs`
-2. `python -m py_compile app.py controllers.py ui_components.py`
-3. `python -m unittest discover -s tests -p "test_*.py"`
-4. `python scripts/run_regression_suite.py --with-golden`
+1. Stable design changes -> `docs/ARCHITECTURE.md`
+2. Runtime snapshot changes -> `docs/SESSION_DUMP.md`
+3. IO semantics changes -> `docs/IO_FORMAT_REQUIREMENTS.md`
+4. Terminology config contract changes -> `docs/terminology_rule_config_notes.md`
+5. Runtime troubleshooting updates -> `docs/troubleshooting.md`

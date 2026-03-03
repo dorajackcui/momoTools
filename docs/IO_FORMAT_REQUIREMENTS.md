@@ -1,106 +1,91 @@
-# IO Format Requirements (Current Implementation)
+# IO Contract (Canonical)
 
-Last updated: 2026-03-02
-Audience: agents and engineers touching Excel read/write behavior
-Purpose: define current IO semantics and special-value handling rules
-Out of scope: UI flow, architecture rationale, and unresolved product policy decisions
+Last updated: 2026-03-03
+Audience: agents and engineers touching processor behavior
+Owns: Excel read/match/write semantics for update flows
+Does not own: UI workflow and architecture decisions
 
-## 1) Scope
-
-This document describes current behavior for the three main data-update flows:
+## 1) Covered Flows
 
 1. `master -> target (single)` in `core/excel_processor.py`
 2. `master -> target (multi)` in `core/multi_column_processor.py`
 3. `target -> master (reverse)` in `core/reverse_excel_processor.py`
 
-## 2) Shared Rules (Source Of Truth)
+## 2) Shared Value Rules (`core/kernel/excel_io.py`)
 
-Source module: `core/kernel/excel_io.py`
+### 2.1 Combined key
 
-### 2.1 Key construction
+`build_combined_key(key_value, match_value, separator='|')`
 
-Function: `build_combined_key(key_value, match_value, separator='|')`
+1. Key and match are normalized with `safe_to_str(..., strip=True)`.
+2. `None` becomes `""`.
+3. If either normalized part is empty, row is skipped (invalid combined key).
 
-1. Uses `safe_to_str(..., strip=True)` for both key and match values.
-2. `None` is converted to `""`.
-3. If either normalized key or match is empty, combined key is invalid and row is skipped.
+### 2.2 Blank detection
 
-### 2.2 Blank detection (for `fill_blank_only`)
-
-Function: `is_blank_value(value)`
-
-Blank is only:
+`is_blank_value(value)` is true only when:
 
 1. `value is None`
-2. string with `value.strip() == ""`
+2. `value` is string and `value.strip() == ""`
 
-Not blank:
+False for: `0`, `0.0`, `float('nan')`, `"nan"`.
 
-1. `0` / `0.0`
-2. `float('nan')`
-3. `"nan"`
+### 2.3 String conversion
 
-### 2.3 Stringification
-
-Function: `safe_to_str(value, strip=...)`
+`safe_to_str(value, strip=...)`:
 
 1. `None -> ""`
-2. Non-string values are converted by `str(value)`.
-3. With `strip=False`, leading/trailing whitespace is preserved.
+2. Non-string -> `str(value)`
+3. `strip=False` preserves leading/trailing whitespace
 
-### 2.4 Blank write policy (`allow_blank_write`)
+### 2.4 Blank write policy
 
-1. New control field: `allow_blank_write` (default `False`).
-2. When `allow_blank_write=False`, content values considered blank by `is_blank_value` are skipped and not written.
-3. When `allow_blank_write=True`, blank values are allowed to write through (including clearing target/master cells).
-4. This switch does not change key matching rules or `fill_blank_only` blank detection.
+`allow_blank_write`:
+
+1. Default is `False`.
+2. `False`: blank content (by `is_blank_value`) is skipped, not written.
+3. `True`: blank content can be written (including clearing cells).
+4. Does not change key-match rules or `fill_blank_only` logic.
 
 ## 3) Flow Semantics
 
 ### 3.1 Master -> target (single)
 
-1. Master values are read into `master_dict[combined_key]`.
-2. For matched target rows:
-   1. overwrite mode: always write matched value
-   2. fill-blank-only mode: write only if target update cell is blank by `is_blank_value`
-3. blank content write:
-   1. default (`allow_blank_write=False`): blank content is skipped
-   2. opt-in (`allow_blank_write=True`): blank content can be written
-4. `post_process_enabled` only controls COM post-process; it does not change business match/update decisions.
+1. Build `master_dict[combined_key]`.
+2. On key match:
+- overwrite: always write
+- fill-blank-only: write only if target cell is blank by `is_blank_value`
+3. Blank content handling follows `allow_blank_write`.
+4. `post_process_enabled` affects only COM post-process step.
 
 ### 3.2 Master -> target (multi)
 
-1. Same matching logic as single mode.
-2. Updates are applied per target column across configured column count.
-3. `fill_blank_only` is evaluated per target cell.
+1. Same match logic as single mode.
+2. Write per configured column.
+3. `fill_blank_only` evaluated per target cell.
 4. Missing master content columns are treated as `""`.
-5. blank content write follows `allow_blank_write` per cell (default skip blank write).
+5. Blank content handling is per cell via `allow_blank_write`.
 
 ### 3.3 Target -> master (reverse)
 
-1. Target files are scanned from row 2.
-2. Target content values are normalized with `safe_to_str(..., strip=False)`.
-3. Master rows are updated on combined key match.
-4. `fill_blank_only` checks blank state on the master update cell.
-5. blank content from target files follows `allow_blank_write` (default skip blank content before merge).
-6. Merge precedence is deterministic:
-   1. target file list is sorted by path
-   2. merge follows sorted order
-   3. later file in sorted order overrides earlier value for same key
+1. Scan target files from row 2.
+2. Content normalized with `safe_to_str(..., strip=False)`.
+3. Update master on combined key match.
+4. `fill_blank_only` checks master destination cell.
+5. Blank content handling follows `allow_blank_write`.
+6. Merge order is deterministic: sorted path order, later file overrides earlier.
 
 ## 4) Special-Value Matrix
 
-| Raw value | As key/match input | As written content | Treated blank in `fill_blank_only` / `allow_blank_write=False` |
+| Raw value | Key/match normalization | Written content | Blank under `is_blank_value` |
 | --- | --- | --- | --- |
-| `None` | `""` (invalid key component) | `""` | Yes |
-| `""` | empty (invalid key component) | `""` | Yes |
-| `"   "` | stripped to empty (invalid key component) | preserved with `strip=False` | Yes |
+| `None` | `""` | `""` | Yes |
+| `""` | `""` | `""` | Yes |
+| `"   "` | `""` | preserved with `strip=False` | Yes |
 | `0` / `0.0` | `"0"` / `"0.0"` | `"0"` / `"0.0"` | No |
 | `float('nan')` | `"nan"` | `"nan"` | No |
 | `"nan"` | `"nan"` | `"nan"` | No |
 
-## 5) Notes
+## 5) Change Rule
 
-1. Current behavior is implementation-accurate, not policy-ideal.
-2. Policy-level open questions stay in `docs/memo_pending_translation_rules.md`.
-3. If IO behavior changes, update this file in the same change set.
+If IO behavior changes, update this file in the same change set.
