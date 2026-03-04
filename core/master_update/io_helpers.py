@@ -10,20 +10,6 @@ from .policies import (
 UNSET = object()
 
 
-def merge_non_blank_cells_fill_blank(
-    target_row: list[Any],
-    source_row: Sequence[Any],
-    content_col_indexes: Sequence[int],
-):
-    for col_idx in content_col_indexes:
-        source_value = source_row[col_idx] if col_idx < len(source_row) else None
-        if is_blank_value(source_value):
-            continue
-        if not is_blank_value(target_row[col_idx]):
-            continue
-        target_row[col_idx] = source_value
-
-
 def merge_non_blank_cells_by_policy(
     *,
     target_row: list[Any],
@@ -40,7 +26,7 @@ def merge_non_blank_cells_by_policy(
 
         current_value = target_row[col_idx]
         if cell_write_policy == CELL_WRITE_POLICY_FILL_BLANK_ONLY:
-            if not is_blank_value(current_value):
+            if (current_value is not UNSET) and (not is_blank_value(current_value)):
                 continue
             target_row[col_idx] = source_value
             if touched_cols is not None:
@@ -56,10 +42,6 @@ def merge_non_blank_cells_by_policy(
             continue
 
         raise ValueError(f"Unsupported cell_write_policy: {cell_write_policy}")
-
-
-def read_row_values(worksheet, row_idx: int, max_col: int) -> list[Any]:
-    return [worksheet.cell(row=row_idx, column=col).value for col in range(1, max_col + 1)]
 
 
 def values_equivalent(old_value: Any, new_value: Any) -> bool:

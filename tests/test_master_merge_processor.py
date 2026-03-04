@@ -58,7 +58,7 @@ class MasterMergeProcessorTestCase(unittest.TestCase):
         processor.set_priority_files([str(path) for path in files])
         return processor
 
-    def test_merge_mode_fill_blank_adds_new_keys(self):
+    def test_merge_mode_append_only_skips_existing_keys_and_adds_new(self):
         master_path = self.root / "master.xlsx"
         updates_dir = self.root / "updates"
         updates_dir.mkdir()
@@ -79,7 +79,7 @@ class MasterMergeProcessorTestCase(unittest.TestCase):
             [
                 ["key", "match", "v1", "v2"],
                 ["K1", "M1", "HIGH_V1", ""],
-                ["K2", "M2", "NEW_HIGH", ""],
+                ["K2", "M2", "NEW_HIGH", "HIGH_V2"],
             ],
         )
         write_workbook(
@@ -87,7 +87,7 @@ class MasterMergeProcessorTestCase(unittest.TestCase):
             [
                 ["key", "match", "v1", "v2"],
                 ["K1", "M1", "LOW_V1", "LOW_V2"],
-                ["K2", "M2", "", "LOW_FILL"],
+                ["K2", "M2", "NEW_LOW", "LOW_V2"],
             ],
         )
 
@@ -100,14 +100,14 @@ class MasterMergeProcessorTestCase(unittest.TestCase):
 
         result = processor.process_files()
 
-        self.assertEqual(result.updated_cells, 1)
+        self.assertEqual(result.updated_cells, 0)
         self.assertEqual(result.added_rows, 1)
         self.assertEqual(result.overwritten_cells, 0)
-        self.assertEqual(result.filled_blank_cells, 1)
+        self.assertEqual(result.filled_blank_cells, 0)
         self.assertEqual(result.skipped_new_keys, 0)
 
-        self.assertEqual(read_row(master_path, 2, 4), ["K1", "M1", "HIGH_V1", "MASTER_KEEP"])
-        self.assertEqual(read_row(master_path, 3, 4), ["K2", "M2", "NEW_HIGH", "LOW_FILL"])
+        self.assertEqual(read_row(master_path, 2, 4), ["K1", "M1", None, "MASTER_KEEP"])
+        self.assertEqual(read_row(master_path, 3, 4), ["K2", "M2", "NEW_HIGH", "HIGH_V2"])
 
     def test_update_master_mode_overwrites_non_blank_and_keeps_last_processed(self):
         master_path = self.root / "master.xlsx"
@@ -236,7 +236,7 @@ class MasterMergeProcessorTestCase(unittest.TestCase):
         self.assertEqual(read_cell(master_path, 2, 3), "SYNC")
         self.assertEqual(read_cell(master_path, 3, 3), "SYNC")
 
-    def test_merge_key_only_mode_treats_match_as_content(self):
+    def test_merge_key_only_mode_append_only_does_not_touch_existing_rows(self):
         master_path = self.root / "master.xlsx"
         updates_dir = self.root / "updates"
         updates_dir.mkdir()
@@ -267,9 +267,10 @@ class MasterMergeProcessorTestCase(unittest.TestCase):
 
         result = processor.process_files()
 
-        self.assertEqual(result.updated_cells, 2)
-        self.assertEqual(result.filled_blank_cells, 2)
-        self.assertEqual(read_row(master_path, 2, 3), ["K1", "M1", "S1"])
+        self.assertEqual(result.updated_cells, 0)
+        self.assertEqual(result.added_rows, 0)
+        self.assertEqual(result.filled_blank_cells, 0)
+        self.assertEqual(read_row(master_path, 2, 3), ["K1", None, None])
 
     def test_update_master_forces_key_only_and_overwrites_match(self):
         master_path = self.root / "master.xlsx"
@@ -341,7 +342,7 @@ class MasterMergeProcessorTestCase(unittest.TestCase):
         self.assertEqual(result.skipped_new_keys, 1)
         self.assertEqual(read_row(master_path, 2, 3), ["K1", "M1", "OLD_V"])
 
-    def test_update_master_sparse_columns_do_not_touch_untouched_cols(self):
+    def test_update_master_dense_rows_overwrite_untouched_cols_too(self):
         master_path = self.root / "master.xlsx"
         updates_dir = self.root / "updates"
         updates_dir.mkdir()
@@ -371,10 +372,123 @@ class MasterMergeProcessorTestCase(unittest.TestCase):
 
         result = processor.process_files()
 
-        self.assertEqual(result.updated_cells, 1)
+        self.assertEqual(result.updated_cells, 3)
         self.assertEqual(result.overwritten_cells, 1)
         self.assertEqual(result.filled_blank_cells, 0)
-        self.assertEqual(read_row(master_path, 2, 5), ["K1", "M1", "KEEP_V1", "NEW_V2", "KEEP_V3"])
+        self.assertEqual(read_row(master_path, 2, 5), ["K1", "M1", None, "NEW_V2", None])
+
+    def test_update_master_dense_blank_values_clear_existing_cells(self):
+        master_path = self.root / "master.xlsx"
+        updates_dir = self.root / "updates"
+        updates_dir.mkdir()
+
+        write_workbook(
+            master_path,
+            [
+                ["key", "match", "v1", "v2"],
+                ["K1", "M1", "OLD_V1", "OLD_V2"],
+            ],
+        )
+        source_path = updates_dir / "source.xlsx"
+        write_workbook(
+            source_path,
+            [
+                ["key", "match", "v1", "v2"],
+                ["K1", "M1", "", "NEW_V2"],
+            ],
+        )
+
+        processor = self._build_processor(master_path, updates_dir, [source_path])
+        processor.set_policies(
+            cell_write_policy=CELL_WRITE_POLICY_OVERWRITE_NON_BLANK,
+            key_admission_policy=KEY_ADMISSION_POLICY_ALLOW_NEW,
+            priority_winner_policy=PRIORITY_WINNER_POLICY_LAST_PROCESSED,
+        )
+
+        result = processor.process_files()
+
+        self.assertEqual(result.updated_cells, 2)
+        self.assertEqual(result.overwritten_cells, 1)
+        self.assertEqual(result.filled_blank_cells, 0)
+        self.assertEqual(read_row(master_path, 2, 4), ["K1", "M1", None, "NEW_V2"])
+
+    def test_update_master_dense_duplicate_keys_use_last_processed_whole_row(self):
+        master_path = self.root / "master.xlsx"
+        updates_dir = self.root / "updates"
+        updates_dir.mkdir()
+
+        write_workbook(
+            master_path,
+            [
+                ["key", "match", "v1", "v2"],
+                ["K1", "OLD_M", "OLD_V1", "OLD_V2"],
+            ],
+        )
+
+        first_path = updates_dir / "first.xlsx"
+        second_path = updates_dir / "second.xlsx"
+        write_workbook(
+            first_path,
+            [
+                ["key", "match", "v1", "v2"],
+                ["K1", "FIRST_M", "FIRST_V1", "FIRST_V2"],
+            ],
+        )
+        write_workbook(
+            second_path,
+            [
+                ["key", "match", "v1", "v2"],
+                ["K1", "SECOND_M", "SECOND_V1", "SECOND_V2"],
+            ],
+        )
+
+        processor = self._build_processor(master_path, updates_dir, [first_path, second_path])
+        processor.set_policies(
+            cell_write_policy=CELL_WRITE_POLICY_OVERWRITE_NON_BLANK,
+            key_admission_policy=KEY_ADMISSION_POLICY_ALLOW_NEW,
+            priority_winner_policy=PRIORITY_WINNER_POLICY_LAST_PROCESSED,
+        )
+
+        result = processor.process_files()
+
+        self.assertEqual(result.updated_cells, 3)
+        self.assertEqual(result.overwritten_cells, 3)
+        self.assertEqual(read_row(master_path, 2, 4), ["K1", "SECOND_M", "SECOND_V1", "SECOND_V2"])
+
+    def test_update_content_sparse_blank_cells_do_not_clear_existing(self):
+        master_path = self.root / "master.xlsx"
+        updates_dir = self.root / "updates"
+        updates_dir.mkdir()
+
+        write_workbook(
+            master_path,
+            [
+                ["key", "match", "v1"],
+                ["K1", "M1", "OLD_V"],
+            ],
+        )
+        source_path = updates_dir / "source.xlsx"
+        write_workbook(
+            source_path,
+            [
+                ["key", "match", "v1"],
+                ["K1", "M1", ""],
+            ],
+        )
+
+        processor = self._build_processor(master_path, updates_dir, [source_path])
+        processor.set_policies(
+            cell_write_policy=CELL_WRITE_POLICY_OVERWRITE_NON_BLANK,
+            key_admission_policy=KEY_ADMISSION_POLICY_EXISTING_ONLY,
+            priority_winner_policy=PRIORITY_WINNER_POLICY_LAST_PROCESSED,
+        )
+
+        result = processor.process_files()
+
+        self.assertEqual(result.updated_cells, 0)
+        self.assertEqual(result.overwritten_cells, 0)
+        self.assertEqual(result.filled_blank_cells, 0)
+        self.assertEqual(read_row(master_path, 2, 3), ["K1", "M1", "OLD_V"])
 
     def test_update_master_noop_keeps_write_stage_zero_and_logs_perf(self):
         master_path = self.root / "master.xlsx"

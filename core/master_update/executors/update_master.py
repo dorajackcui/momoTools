@@ -1,4 +1,4 @@
-from typing import Sequence
+from typing import Any, Sequence
 from time import perf_counter
 
 from core.kernel import is_blank_value, open_workbook
@@ -13,6 +13,7 @@ from core.master_update.policies import (
 from core.master_update.source_collectors import (
     build_identity_key_from_values,
     collect_source_candidates,
+    collect_source_rows_dense,
 )
 
 
@@ -20,29 +21,71 @@ class UpdateMasterExecutor(BaseMasterUpdateExecutor):
     required_row_key_policy = ROW_KEY_POLICY_KEY_ONLY
 
     def run(self, source_files: Sequence[str]):
-        total_start = perf_counter()
         self.processor.row_key_policy = self.required_row_key_policy
+        # Historical policy name `overwrite_non_blank` maps to dense-row overwrite here.
+        return self._run_with_collector(
+            source_files=source_files,
+            mode_name="Update Master",
+            collector_mode="dense",
+        )
+
+    def _run_sparse_overwrite(self, source_files: Sequence[str], *, mode_name: str):
+        # Update Content uses sparse non-blank cell semantics.
+        return self._run_with_collector(
+            source_files=source_files,
+            mode_name=mode_name,
+            collector_mode="sparse",
+        )
+
+    def _run_with_collector(
+        self,
+        *,
+        source_files: Sequence[str],
+        mode_name: str,
+        collector_mode: str,
+    ):
+        total_start = perf_counter()
 
         max_col, content_col_indexes = self.resolve_layout()
 
         collect_start = perf_counter()
-        source_candidates = collect_source_candidates(
-            source_files=source_files,
-            key_col=self.key_col,
-            match_col=self.match_col,
-            row_key_policy=self.processor.row_key_policy,
-            max_col=max_col,
-            content_col_indexes=content_col_indexes,
-            cell_write_policy=self.processor.cell_write_policy,
-            priority_winner_policy=self.processor.priority_winner_policy,
-            key_separator=self.processor.io_contract.key_separator,
-            on_log=self.processor.log,
-            on_log_error=self.processor._log_error,
-            stats=self.processor.stats,
-        )
+        candidate_rows: dict[str, list[Any]]
+        touched_cols_by_key: dict[str, set[int]] | None
+        if collector_mode == "dense":
+            source_rows = collect_source_rows_dense(
+                source_files=source_files,
+                key_col=self.key_col,
+                match_col=self.match_col,
+                row_key_policy=self.processor.row_key_policy,
+                max_col=max_col,
+                key_separator=self.processor.io_contract.key_separator,
+                on_log=self.processor.log,
+                on_log_error=self.processor._log_error,
+                stats=self.processor.stats,
+            )
+            candidate_rows = source_rows.rows
+            touched_cols_by_key = None
+        elif collector_mode == "sparse":
+            source_candidates = collect_source_candidates(
+                source_files=source_files,
+                key_col=self.key_col,
+                match_col=self.match_col,
+                row_key_policy=self.processor.row_key_policy,
+                max_col=max_col,
+                content_col_indexes=content_col_indexes,
+                cell_write_policy=self.processor.cell_write_policy,
+                priority_winner_policy=self.processor.priority_winner_policy,
+                key_separator=self.processor.io_contract.key_separator,
+                on_log=self.processor.log,
+                on_log_error=self.processor._log_error,
+                stats=self.processor.stats,
+            )
+            candidate_rows = source_candidates.rows
+            touched_cols_by_key = source_candidates.touched_cols_by_key
+        else:
+            raise ValueError(f"Unsupported collector_mode: {collector_mode}")
+
         collect_sources_elapsed = perf_counter() - collect_start
-        candidate_rows = source_candidates.rows
-        touched_cols_by_key = source_candidates.touched_cols_by_key
         candidate_key_set = set(candidate_rows.keys())
 
         updated_cells = 0
@@ -55,10 +98,12 @@ class UpdateMasterExecutor(BaseMasterUpdateExecutor):
 
         scan_master_start = perf_counter()
         plan_updates_elapsed = 0.0
-        max_touched_col_num = max(
-            (max(cols) + 1 for cols in touched_cols_by_key.values() if cols),
-            default=0,
-        )
+        max_touched_col_num = 0
+        if touched_cols_by_key is not None:
+            max_touched_col_num = max(
+                (max(cols) + 1 for cols in touched_cols_by_key.values() if cols),
+                default=0,
+            )
         try:
             with open_workbook(self.processor.master_file_path, read_only=True) as workbook:
                 worksheet = workbook.active
@@ -69,7 +114,10 @@ class UpdateMasterExecutor(BaseMasterUpdateExecutor):
                     scan_key_max_col = max(key_col_num, match_col_num)
                 else:
                     scan_key_max_col = key_col_num
-                scan_max_col = max(scan_key_max_col, max_touched_col_num, 1)
+                if touched_cols_by_key is None:
+                    scan_max_col = max(scan_key_max_col, max_col, 1)
+                else:
+                    scan_max_col = max(scan_key_max_col, max_touched_col_num, 1)
 
                 for row_idx, row_values in enumerate(
                     worksheet.iter_rows(
@@ -96,24 +144,35 @@ class UpdateMasterExecutor(BaseMasterUpdateExecutor):
                     if merged_values is None:
                         continue
 
-                    touched_cols = touched_cols_by_key.get(identity_key)
-                    if not touched_cols:
-                        continue
-
                     plan_start = perf_counter()
-                    for col_idx in touched_cols:
-                        new_value = merged_values[col_idx]
-                        if new_value is UNSET:
-                            continue
-                        old_value = row_values[col_idx] if col_idx < len(row_values) else None
-                        if values_equivalent(old_value, new_value):
-                            continue
-                        pending_cell_updates[(row_idx, col_idx + 1)] = new_value
-                        updated_cells += 1
-                        if is_blank_value(old_value) and (not is_blank_value(new_value)):
-                            filled_blank_cells += 1
-                        elif (not is_blank_value(old_value)) and (not is_blank_value(new_value)):
-                            overwritten_cells += 1
+                    if touched_cols_by_key is None:
+                        for col_idx in content_col_indexes:
+                            new_value = merged_values[col_idx] if col_idx < len(merged_values) else None
+                            old_value = row_values[col_idx] if col_idx < len(row_values) else None
+                            if values_equivalent(old_value, new_value):
+                                continue
+                            pending_cell_updates[(row_idx, col_idx + 1)] = new_value
+                            updated_cells += 1
+                            if is_blank_value(old_value) and (not is_blank_value(new_value)):
+                                filled_blank_cells += 1
+                            elif (not is_blank_value(old_value)) and (not is_blank_value(new_value)):
+                                overwritten_cells += 1
+                    else:
+                        touched_cols = touched_cols_by_key.get(identity_key)
+                        if touched_cols:
+                            for col_idx in touched_cols:
+                                new_value = merged_values[col_idx]
+                                if new_value is UNSET:
+                                    continue
+                                old_value = row_values[col_idx] if col_idx < len(row_values) else None
+                                if values_equivalent(old_value, new_value):
+                                    continue
+                                pending_cell_updates[(row_idx, col_idx + 1)] = new_value
+                                updated_cells += 1
+                                if is_blank_value(old_value) and (not is_blank_value(new_value)):
+                                    filled_blank_cells += 1
+                                elif (not is_blank_value(old_value)) and (not is_blank_value(new_value)):
+                                    overwritten_cells += 1
                     plan_updates_elapsed += perf_counter() - plan_start
         except Exception as exc:
             self.processor.stats.files_failed += 1
@@ -131,7 +190,10 @@ class UpdateMasterExecutor(BaseMasterUpdateExecutor):
             for identity_key, merged_values in candidate_rows.items():
                 if identity_key in master_keys:
                     continue
-                row_to_append = [None if value is UNSET else value for value in merged_values]
+                if touched_cols_by_key is None:
+                    row_to_append = list(merged_values)
+                else:
+                    row_to_append = [None if value is UNSET else value for value in merged_values]
                 new_rows_to_append.append(row_to_append)
                 master_keys.add(identity_key)
             added_rows = len(new_rows_to_append)
@@ -165,7 +227,6 @@ class UpdateMasterExecutor(BaseMasterUpdateExecutor):
                 )
                 raise
 
-        mode_name = "Update Content" if self.required_row_key_policy == ROW_KEY_POLICY_COMBINED else "Update Master"
         total_elapsed = perf_counter() - total_start
         self.processor.log(
             (

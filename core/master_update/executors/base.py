@@ -1,6 +1,6 @@
 from typing import Sequence, Type
 
-from core.kernel import build_combined_key, open_workbook, safe_to_str
+from core.kernel import open_workbook
 from core.master_update.models import MasterMergeResult
 from core.master_update.policies import (
     CELL_WRITE_POLICY_FILL_BLANK_ONLY,
@@ -8,7 +8,6 @@ from core.master_update.policies import (
     KEY_ADMISSION_POLICY_ALLOW_NEW,
     KEY_ADMISSION_POLICY_EXISTING_ONLY,
     PRIORITY_WINNER_POLICY_LAST_PROCESSED,
-    ROW_KEY_POLICY_COMBINED,
     ROW_KEY_POLICY_KEY_ONLY,
 )
 
@@ -83,20 +82,6 @@ class BaseMasterUpdateExecutor:
             if index != self.key_col and (include_match_as_content or index != self.match_col)
         ]
         return max_col, content_col_indexes
-
-    def identity_key_from_row(self, row_values) -> str | None:
-        key_value = row_values[self.key_col] if self.key_col < len(row_values) else None
-        if self.processor.row_key_policy == ROW_KEY_POLICY_COMBINED:
-            match_value = row_values[self.match_col] if self.match_col < len(row_values) else None
-            return build_combined_key(
-                key_value,
-                match_value,
-                separator=self.processor.io_contract.key_separator,
-            )
-        if self.processor.row_key_policy == ROW_KEY_POLICY_KEY_ONLY:
-            key_text = safe_to_str(key_value, strip=True)
-            return key_text if key_text else None
-        raise ValueError(f"Unsupported row_key_policy: {self.processor.row_key_policy}")
 
     def finalize_result(
         self,

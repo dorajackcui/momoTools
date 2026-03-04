@@ -87,33 +87,57 @@ False for: `0`, `0.0`, `float('nan')`, `"nan"`.
 2. Row identity can be policy-driven:
 - `combined_key`: `key + '|' + match` after normalization, both must be non-blank
 - `key_only`: normalized `key` only, `match` can be blank
-3. Only non-blank source cells are considered update candidates.
+3. Source-row candidate rules:
+- `Merge Masters` (append-only): source rows are treated as complete rows (no per-cell blank filtering in merge planning).
+- `Update Master`: source rows are treated as complete rows (no per-cell blank filtering; blank values are valid update values).
+- `Update Content`: only non-blank source cells are considered update candidates.
 4. Modes and policies:
-- `Merge Masters`: `fill_blank_only + allow_new_key`; key policy is UI-selectable (default `combined_key`)
-- `Update Master`: `overwrite with non-blank values` (`overwrite_non_blank`) + `allow_new_key`; key policy is fixed `key_only`
+- `Merge Masters`: `fill_blank_only + allow_new_key`; key policy is UI-selectable (default `combined_key`), and execution is append-only by default (assume existing master rows are already filled)
+- `Update Master`: `overwrite by dense row values` (`overwrite_non_blank`) + `allow_new_key`; key policy is fixed `key_only`
 - `Update Content`: `overwrite with non-blank values` (`overwrite_non_blank`) + `existing_key_only`; key policy is fixed `combined_key`
+- Compatibility note: policy token `overwrite_non_blank` is kept stable for API/dispatcher compatibility; concrete write semantics are mode-specific (`Update Master` dense vs `Update Content` sparse).
 5. Match-column write behavior:
-- In `key_only` modes (`Merge Masters` when toggled, and `Update Master`), `match_col` is treated as content and can be updated.
-- In `combined_key` modes, `match_col` is reserved for matching and excluded from content update columns.
+- In `Merge Masters` append-only mode, `match_col` is written only when appending a new row; existing master rows are not modified.
+- In `Update Master` (`key_only`), `match_col` is treated as content and can be updated.
+- In `combined_key` overwrite mode (`Update Content`), `match_col` is reserved for matching and excluded from content update columns.
 6. Priority winner in overwrite modes:
 - `last_processed` (later processed file overrides earlier processed file)
 7. New key handling:
 - `allow_new_key`: append as new row
 - `existing_key_only`: skip new key and count as skipped
 8. Duplicate keys in master:
-- all duplicate rows for the same key are synchronized to the merged value
+- In overwrite modes (`Update Master` / `Update Content`), all duplicate rows for the same key are synchronized to the merged value.
+- In `Merge Masters` append-only mode, existing duplicate rows are not modified.
+9. Duplicate identities in source updates:
+- In `Merge Masters` append-only mode, duplicate identities use first-processed full row (`first_processed` wins for the whole row).
+- In `Update Master` dense mode, duplicate identities use last-processed full row (`last_processed` wins for the whole row).
+- In `Update Content` sparse mode, duplicate identities follow per-cell non-blank overwrite (`last_processed` per touched cell).
 
-### 3.5 Performance Notes (No Behavior Change)
+### 3.5 Performance Notes
 
-For `Update Master` and `Update Content`:
+For `Merge Masters` (append-only default):
+
+1. Source candidates are aggregated first.
+2. Master scan reads only columns needed to build row identity (key/match).
+3. Existing master rows are not opened for per-cell update planning.
+4. Read-write workbook open/save is skipped when there are no new keys to append.
+5. Stage timing summary is logged for observability.
+
+For `Update Master` (dense-row overwrite):
+
+1. Source candidates are aggregated first.
+2. Master scan uses read-only planning.
+3. Existing matched rows are planned against full content-column scope (no touched-column sparse pruning).
+4. Read-write workbook open/save is skipped when planned updates and new rows are both empty.
+5. Stage timing summary is logged for observability.
+
+For `Update Content` (sparse overwrite):
 
 1. Source candidates are aggregated first.
 2. Master scan uses read-only planning.
 3. Read-write workbook open/save is skipped when planned updates and new rows are both empty.
 4. Candidate touched columns are tracked to avoid full content-column loops on matched rows.
 5. Stage timing summary is logged for observability.
-
-These are implementation optimizations only; merge semantics remain unchanged.
 
 ## 4) Special-Value Matrix
 

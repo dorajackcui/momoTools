@@ -69,21 +69,27 @@ Top-level notebook groups:
 4. Terminology extractor pipeline: extract -> normalize/dedup -> relation/review -> export.
 5. Terminology output sheets: `terms_summary`, `relations_summary`, `review`, `details`.
 6. Update Master modes use one processor with policy combinations:
-- `Merge Masters`: fill blank only + allow new key
-- `Update Master`: overwrite with non-blank values + allow new key
-- `Update Content`: overwrite with non-blank values + existing key only
-7. Row-key strategy split:
+- `Merge Masters`: fill blank only + allow new key (append-only default; existing master rows are not modified)
+- `Update Master`: dense-row overwrite (blank values are valid and can clear master cells) + allow new key
+- `Update Content`: sparse non-blank overwrite + existing key only
+- Compatibility note: policy value `overwrite_non_blank` is intentionally preserved for dispatcher/API compatibility, while actual write behavior is mode-specific.
+7. `Merge Masters` source duplicate behavior:
+- duplicate identities in updates keep first-processed full row (whole-row winner), then append only if master lacks the identity.
+8. `Update Master` source duplicate behavior:
+- duplicate identities in updates keep last-processed full row (whole-row winner).
+9. Row-key strategy split:
 - `Merge Masters`: UI toggle for `combined_key` (default) vs `key_only`
 - `Update Master`: fixed `key_only`; `match` column is updatable content
 - `Update Content`: fixed `combined_key`; requires key+match hit
-8. Update Master suite emits stage timing summaries:
+10. Update Master suite emits stage timing summaries:
+- `Merge Masters`: `collect_sources`, `scan_master_ro`, `open_master_rw_apply`, `save_master`, `total`
 - `collect_sources`
 - `scan_master_ro`
 - `plan_updates`
 - `open_master_rw_apply`
 - `save_master`
 - `total`
-9. Update Master suite column scope:
+11. Update Master suite column scope:
 - shared `last_update_col` for all three modes (applies to both master and source)
 - default UI value is `K` (1-based column 11)
 
