@@ -138,17 +138,39 @@ class TerminologyProcessorTestCase(unittest.TestCase):
             relations_summary_df = workbook["relations_summary"]
             details_df = workbook["details"]
 
+            self.assertSetEqual(set(terms_summary_df["term_type"].unique()), {"body", "suffix"})
+
             self.assertFalse((details_df["extractor_type"] == "compound_split").any())
             self.assertTrue((details_df["file"] == "abc.xlsx").any())
             self.assertTrue((details_df["file"] == "cde.xlsx").any())
             self.assertFalse((details_df["file"] == "other.xlsx").any())
 
-            target_term = terms_summary_df[terms_summary_df["term_norm"] == "star basket"].iloc[0]
+            target_term = terms_summary_df[
+                (terms_summary_df["term_type"] == "body")
+                & (terms_summary_df["term_norm"] == "star basket")
+            ].iloc[0]
             self.assertEqual(int(target_term["occurrences_count"]), 2)
             self.assertEqual(int(target_term["files_count"]), 2)
             self.assertEqual(str(target_term["files_list"]), "abc.xlsx;cde.xlsx")
             self.assertEqual(int(target_term["keys_count"]), 2)
             self.assertEqual(str(target_term["keys_list"]), "npc_name;player_name")
+
+            self.assertEqual(
+                list(terms_summary_df.columns),
+                [
+                    "term_id",
+                    "term_type",
+                    "term_norm",
+                    "occurrences_count",
+                    "files_count",
+                    "files_list",
+                    "keys_count",
+                    "keys_list",
+                    "first_extractor",
+                    "is_low_confidence",
+                    "review_reasons",
+                ],
+            )
 
             cross_file = relations_summary_df[
                 (relations_summary_df["relation_type"] == "cross_file")
@@ -172,12 +194,12 @@ class TerminologyProcessorTestCase(unittest.TestCase):
             suffix_family = relations_summary_df[
                 (relations_summary_df["relation_type"] == "affix_group")
                 & (relations_summary_df["affix_role"] == "suffix_anchor")
-                & (relations_summary_df["affix_anchor_term"] == "suffixa")
+                & (relations_summary_df["affix_anchor_term"] == "\u00b7suffixa")
             ]
             self.assertFalse(prefix_family.empty)
             self.assertFalse(suffix_family.empty)
             self.assertEqual(int(prefix_family.iloc[0]["affix_related_count"]), 1)
-            self.assertEqual(str(prefix_family.iloc[0]["affix_related_list"]), "suffixa")
+            self.assertEqual(str(prefix_family.iloc[0]["affix_related_list"]), "\u00b7suffixa")
             self.assertEqual(str(prefix_family.iloc[0]["affix_delimiters"]), "\u00b7")
             self.assertEqual(int(suffix_family.iloc[0]["affix_related_count"]), 1)
             self.assertEqual(str(suffix_family.iloc[0]["affix_related_list"]), "term1")
@@ -208,6 +230,7 @@ class TerminologyProcessorTestCase(unittest.TestCase):
                 list(details_df.columns),
                 [
                     "term_id",
+                    "term_type",
                     "term_norm",
                     "candidate_id",
                     "extractor_type",
@@ -223,7 +246,8 @@ class TerminologyProcessorTestCase(unittest.TestCase):
                 ],
             )
             detail_item = details_df[
-                (details_df["term_norm"] == "star basket")
+                (details_df["term_type"] == "body")
+                & (details_df["term_norm"] == "star basket")
                 & (details_df["file"] == "abc.xlsx")
             ].iloc[0]
             self.assertEqual(str(detail_item["key_value"]), "player_name")
@@ -497,7 +521,7 @@ class TerminologyProcessorTestCase(unittest.TestCase):
             suffix_family = relations_summary_df[
                 (relations_summary_df["relation_type"] == "affix_group")
                 & (relations_summary_df["affix_role"] == "suffix_anchor")
-                & (relations_summary_df["affix_anchor_term"] == "tail")
+                & (relations_summary_df["affix_anchor_term"] == "\u00b7tail")
             ]
             self.assertFalse(prefix_family.empty)
             self.assertFalse(suffix_family.empty)
@@ -531,7 +555,7 @@ class TerminologyProcessorTestCase(unittest.TestCase):
             french_suffix = relations_summary_df[
                 (relations_summary_df["relation_type"] == "affix_group")
                 & (relations_summary_df["affix_role"] == "suffix_anchor")
-                & (relations_summary_df["affix_anchor_term"] == "prairie printani\u00e8re")
+                & (relations_summary_df["affix_anchor_term"] == ": prairie printani\u00e8re")
             ]
             zh_prefix = relations_summary_df[
                 (relations_summary_df["relation_type"] == "affix_group")
@@ -541,7 +565,7 @@ class TerminologyProcessorTestCase(unittest.TestCase):
             zh_suffix = relations_summary_df[
                 (relations_summary_df["relation_type"] == "affix_group")
                 & (relations_summary_df["affix_role"] == "suffix_anchor")
-                & (relations_summary_df["affix_anchor_term"] == "\u76f8\u9080")
+                & (relations_summary_df["affix_anchor_term"] == "\u00b7\u76f8\u9080")
             ]
             self.assertFalse(french_prefix.empty)
             self.assertFalse(french_suffix.empty)
@@ -567,14 +591,26 @@ class TerminologyProcessorTestCase(unittest.TestCase):
             config["versions"] = "2.2.3"
             _result, workbook = self._run_processor(input_dir, config, temp_dir)
 
+            terms_summary_df = workbook["terms_summary"]
             relations_summary_df = workbook["relations_summary"]
+            body_row = terms_summary_df[
+                (terms_summary_df["term_type"] == "body")
+                & (terms_summary_df["term_norm"] == "A")
+            ]
+            suffix_row = terms_summary_df[
+                (terms_summary_df["term_type"] == "suffix")
+                & (terms_summary_df["term_norm"] == ":B:C")
+            ]
+            self.assertFalse(body_row.empty)
+            self.assertFalse(suffix_row.empty)
+
             prefix_a = relations_summary_df[
                 (relations_summary_df["relation_type"] == "affix_group")
                 & (relations_summary_df["affix_role"] == "prefix_anchor")
                 & (relations_summary_df["affix_anchor_term"] == "A")
             ]
             self.assertFalse(prefix_a.empty)
-            self.assertEqual(str(prefix_a.iloc[0]["affix_related_list"]), "B:C")
+            self.assertEqual(str(prefix_a.iloc[0]["affix_related_list"]), ":B:C")
 
             prefix_b = relations_summary_df[
                 (relations_summary_df["relation_type"] == "affix_group")
@@ -616,10 +652,49 @@ class TerminologyProcessorTestCase(unittest.TestCase):
             suffix_family = relations_summary_df[
                 (relations_summary_df["relation_type"] == "affix_group")
                 & (relations_summary_df["affix_role"] == "suffix_anchor")
-                & (relations_summary_df["affix_anchor_term"] == "omega")
+                & (relations_summary_df["affix_anchor_term"] == "\u00b7omega")
             ]
             self.assertFalse(prefix_family.empty)
             self.assertFalse(suffix_family.empty)
+
+    def test_process_files_logs_stage_stats_and_version_filter_counts(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            input_dir = os.path.join(temp_dir, "input")
+            os.makedirs(input_dir)
+
+            target_file = os.path.join(input_dir, "abc.xlsx")
+            self._write_workbook(
+                target_file,
+                headers=["version", "key", "source"],
+                rows=[
+                    ["2.2.3", "item_name", "alpha\u00b7omega"],
+                    ["9.9.9", "item_name", "should_skip"],
+                    ["2.2.3", "item_name", "beta"],
+                ],
+            )
+
+            config = self._base_config()
+            config["files"] = "*"
+            config["versions"] = "2.2.3"
+
+            config_path = os.path.join(temp_dir, "rules.json")
+            output_path = os.path.join(temp_dir, "result.xlsx")
+            self._write_config(config_path, config)
+
+            logs: list[str] = []
+            processor = TerminologyProcessor(log_callback=logs.append)
+            processor.set_input_folder(input_dir)
+            processor.set_rule_config(config_path)
+            processor.set_output_file(output_path)
+            processor.process_files()
+
+            loaded_log = next((line for line in logs if line.startswith("Loaded terminology config: ")), "")
+            stage_log = next((line for line in logs if line.startswith("Terminology stage stats: ")), "")
+            self.assertIn("versions=2.2.3", loaded_log)
+            self.assertIn("rows_scanned=3", stage_log)
+            self.assertIn("rows_skipped_by_version=1", stage_log)
+            self.assertIn("body_terms=", stage_log)
+            self.assertIn("suffix_terms=", stage_log)
 
 
 if __name__ == "__main__":

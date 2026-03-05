@@ -15,6 +15,7 @@ build/
 
 # Environment
 venv/
+.venv/
 env/
 .env
 

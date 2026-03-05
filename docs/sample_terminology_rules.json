@@ -1,7 +1,7 @@
 {
   "version": 1,
   "files": "*",
-  "versions": "2.3.1, 2.3.2",
+  "versions": "2.4.1, 2.4.2",
   "affix_delimiters": [
     "\u00b7",
     ":"
@@ -30,7 +30,7 @@
       "type": "record_rule",
       "enabled": true,
       "skip_header": true,
-      "term_column": "Translation",
+      "term_column": "MsgStr",
       "key": "^(?=.*name)(?!.*LDLG_Text).*$",
       "key_regex": true
     },
@@ -39,7 +39,7 @@
       "type": "tag_span",
       "enabled": true,
       "source_columns": [
-        "Translation"
+        "MsgStr"
       ],
       "open_tag": [
         "<RedBold>",

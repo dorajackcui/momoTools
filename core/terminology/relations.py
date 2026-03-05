@@ -1,7 +1,7 @@
 import re
 from collections import defaultdict
 
-from .dedup import build_term_aggregates
+from .dedup import build_term_aggregates, split_term_by_first_delimiter
 from .normalize import build_dedup_key, normalize_term
 from .types import (
     Candidate,
@@ -20,7 +20,7 @@ def build_cross_file_rows(
 ) -> list[RelationSummaryRow]:
     rows: list[RelationSummaryRow] = []
     term_aggregates = build_term_aggregates(occurrences)
-    for term in sorted(terms, key=lambda item: item.term_norm):
+    for term in sorted(terms, key=lambda item: (item.term_type, item.term_norm, item.term_id)):
         aggregate = term_aggregates.get(term.term_id, {})
         files_count = int(aggregate.get("files_count", term.files_count))
         if files_count < 2:
@@ -42,10 +42,9 @@ def build_cross_file_rows(
 def build_affix_group_rows(
     candidates: list[Candidate],
     normalization_settings: NormalizationSettings,
-    dedup_to_term_id: dict[str, str],
+    dedup_to_term_id: dict[tuple[str, str], str],
     term_by_id: dict[str, TermEntry],
     affix_delimiters: tuple[str, ...],
-    case_insensitive_dedup: bool,
 ) -> list[RelationSummaryRow]:
     delimiters = tuple(item for item in affix_delimiters if str(item).strip())
     if not delimiters:
@@ -53,55 +52,57 @@ def build_affix_group_rows(
 
     pair_counts: dict[tuple[str, str], int] = defaultdict(int)
     pair_delimiters: dict[tuple[str, str], set[str]] = defaultdict(set)
-    key_to_display: dict[str, str] = {}
+    body_key_to_display: dict[str, str] = {}
+    suffix_key_to_display: dict[str, str] = {}
 
     for candidate in candidates:
-        split_result = _split_by_first_delimiter(candidate.term_raw, delimiters)
+        split_result = split_term_by_first_delimiter(candidate.term_raw, delimiters)
         if split_result is None:
             continue
-        prefix_raw, suffix_raw, delimiter = split_result
+        body_raw, suffix_raw, delimiter = split_result
 
-        prefix_norm = normalize_term(prefix_raw, normalization_settings)
+        body_norm = normalize_term(body_raw, normalization_settings)
         suffix_norm = normalize_term(suffix_raw, normalization_settings)
-        if not prefix_norm or not suffix_norm:
+        if not body_norm or not suffix_norm:
             continue
 
-        prefix_key = build_dedup_key(prefix_norm, case_insensitive_dedup)
-        suffix_key = build_dedup_key(suffix_norm, case_insensitive_dedup)
-        if prefix_key == suffix_key:
+        body_dedup_key = build_dedup_key(body_norm, normalization_settings.case_insensitive_dedup)
+        suffix_dedup_key = build_dedup_key(suffix_norm, normalization_settings.case_insensitive_dedup)
+
+        body_term_id = dedup_to_term_id.get(("body", body_dedup_key))
+        suffix_term_id = dedup_to_term_id.get(("suffix", suffix_dedup_key))
+        if not body_term_id or not suffix_term_id:
             continue
 
-        prefix_term_id = dedup_to_term_id.get(prefix_key)
-        suffix_term_id = dedup_to_term_id.get(suffix_key)
-        prefix_display = term_by_id[prefix_term_id].term_norm if prefix_term_id and prefix_term_id in term_by_id else prefix_norm
-        suffix_display = term_by_id[suffix_term_id].term_norm if suffix_term_id and suffix_term_id in term_by_id else suffix_norm
-        key_to_display.setdefault(prefix_key, prefix_display)
-        key_to_display.setdefault(suffix_key, suffix_display)
+        body_display = term_by_id[body_term_id].term_norm
+        suffix_display = term_by_id[suffix_term_id].term_norm
+        body_key_to_display.setdefault(body_dedup_key, body_display)
+        suffix_key_to_display.setdefault(suffix_dedup_key, suffix_display)
 
-        pair_key = (prefix_key, suffix_key)
+        pair_key = (body_dedup_key, suffix_dedup_key)
         pair_counts[pair_key] += 1
         pair_delimiters[pair_key].add(delimiter)
 
-    prefix_related_counts: dict[str, dict[str, int]] = defaultdict(lambda: defaultdict(int))
-    prefix_delimiters: dict[str, set[str]] = defaultdict(set)
+    body_related_counts: dict[str, dict[str, int]] = defaultdict(lambda: defaultdict(int))
+    body_delimiters: dict[str, set[str]] = defaultdict(set)
     suffix_related_counts: dict[str, dict[str, int]] = defaultdict(lambda: defaultdict(int))
     suffix_delimiters: dict[str, set[str]] = defaultdict(set)
 
-    for (prefix_key, suffix_key), count in pair_counts.items():
-        prefix_related_counts[prefix_key][suffix_key] += count
-        suffix_related_counts[suffix_key][prefix_key] += count
+    for (body_key, suffix_key), count in pair_counts.items():
+        body_related_counts[body_key][suffix_key] += count
+        suffix_related_counts[suffix_key][body_key] += count
 
-        delimiters_for_pair = pair_delimiters.get((prefix_key, suffix_key), set())
-        prefix_delimiters[prefix_key].update(delimiters_for_pair)
+        delimiters_for_pair = pair_delimiters.get((body_key, suffix_key), set())
+        body_delimiters[body_key].update(delimiters_for_pair)
         suffix_delimiters[suffix_key].update(delimiters_for_pair)
 
     rows: list[RelationSummaryRow] = []
 
-    for prefix_key in sorted(prefix_related_counts.keys(), key=lambda item: key_to_display.get(item, item)):
-        anchor_term = key_to_display.get(prefix_key, prefix_key)
-        related_keys = sorted(prefix_related_counts[prefix_key].keys(), key=lambda item: key_to_display.get(item, item))
-        related_terms = [key_to_display.get(item, item) for item in related_keys]
-        evidence_count = sum(prefix_related_counts[prefix_key].values())
+    for body_key in sorted(body_related_counts.keys(), key=lambda item: body_key_to_display.get(item, item)):
+        anchor_term = body_key_to_display.get(body_key, body_key)
+        related_keys = sorted(body_related_counts[body_key].keys(), key=lambda item: suffix_key_to_display.get(item, item))
+        related_terms = [suffix_key_to_display.get(item, item) for item in related_keys]
+        evidence_count = sum(body_related_counts[body_key].values())
         rows.append(
             RelationSummaryRow(
                 relation_type="affix_group",
@@ -110,15 +111,15 @@ def build_affix_group_rows(
                 affix_anchor_term=anchor_term,
                 affix_related_count=len(related_terms),
                 affix_related_list=";".join(related_terms),
-                affix_delimiters=";".join(sorted(prefix_delimiters.get(prefix_key, set()))),
+                affix_delimiters=";".join(sorted(body_delimiters.get(body_key, set()))),
                 notes="",
             )
         )
 
-    for suffix_key in sorted(suffix_related_counts.keys(), key=lambda item: key_to_display.get(item, item)):
-        anchor_term = key_to_display.get(suffix_key, suffix_key)
-        related_keys = sorted(suffix_related_counts[suffix_key].keys(), key=lambda item: key_to_display.get(item, item))
-        related_terms = [key_to_display.get(item, item) for item in related_keys]
+    for suffix_key in sorted(suffix_related_counts.keys(), key=lambda item: suffix_key_to_display.get(item, item)):
+        anchor_term = suffix_key_to_display.get(suffix_key, suffix_key)
+        related_keys = sorted(suffix_related_counts[suffix_key].keys(), key=lambda item: body_key_to_display.get(item, item))
+        related_terms = [body_key_to_display.get(item, item) for item in related_keys]
         evidence_count = sum(suffix_related_counts[suffix_key].values())
         rows.append(
             RelationSummaryRow(
@@ -141,10 +142,9 @@ def build_relation_summary(
     occurrences: list[TermOccurrence],
     candidates: list[Candidate],
     normalization_settings: NormalizationSettings,
-    dedup_to_term_id: dict[str, str],
+    dedup_to_term_id: dict[tuple[str, str], str],
     term_by_id: dict[str, TermEntry],
     affix_delimiters: tuple[str, ...],
-    case_insensitive_dedup: bool,
 ) -> list[RelationSummaryRow]:
     rows: list[RelationSummaryRow] = []
     rows.extend(build_cross_file_rows(terms, occurrences))
@@ -156,7 +156,6 @@ def build_relation_summary(
             dedup_to_term_id=dedup_to_term_id,
             term_by_id=term_by_id,
             affix_delimiters=affix_delimiters,
-            case_insensitive_dedup=case_insensitive_dedup,
         )
     )
     return sorted(
@@ -208,28 +207,6 @@ def build_review_items(
             )
 
     return review_items, reasons_by_term
-
-
-def _split_by_first_delimiter(text: str, delimiters: tuple[str, ...]) -> tuple[str, str, str] | None:
-    best_index: int | None = None
-    best_delimiter = ""
-
-    for delimiter in delimiters:
-        index = text.find(delimiter)
-        if index < 0:
-            continue
-        if best_index is None or index < best_index:
-            best_index = index
-            best_delimiter = delimiter
-
-    if best_index is None:
-        return None
-
-    prefix_raw = text[:best_index]
-    suffix_raw = text[best_index + len(best_delimiter) :]
-    if not prefix_raw.strip() or not suffix_raw.strip():
-        return None
-    return prefix_raw, suffix_raw, best_delimiter
 
 
 def _term_review_reasons(term: str, thresholds: ThresholdSettings) -> list[str]:

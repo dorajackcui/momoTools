@@ -14,6 +14,7 @@ class TerminologyExcelExporter:
     ) -> None:
         terms_summary_columns = [
             "term_id",
+            "term_type",
             "term_norm",
             "occurrences_count",
             "files_count",
@@ -28,6 +29,7 @@ class TerminologyExcelExporter:
             [
                 {
                     "term_id": row.term_id,
+                    "term_type": row.term_type,
                     "term_norm": row.term_norm,
                     "occurrences_count": row.occurrences_count,
                     "files_count": row.files_count,
@@ -105,6 +107,7 @@ class TerminologyExcelExporter:
 
         details_columns = [
             "term_id",
+            "term_type",
             "term_norm",
             "candidate_id",
             "extractor_type",
@@ -122,6 +125,7 @@ class TerminologyExcelExporter:
             [
                 {
                     "term_id": occ.term_id,
+                    "term_type": occ.term_type,
                     "term_norm": occ.term_norm,
                     "candidate_id": occ.candidate.candidate_id,
                     "extractor_type": occ.candidate.extractor_type,

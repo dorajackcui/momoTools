@@ -96,6 +96,7 @@ class NormalizedCandidate:
 @dataclass
 class TermEntry:
     term_id: str
+    term_type: str
     term_norm: str
     dedup_key: str
     occurrences_count: int
@@ -108,6 +109,7 @@ class TermEntry:
 @dataclass(frozen=True)
 class TermOccurrence:
     term_id: str
+    term_type: str
     term_norm: str
     candidate: Candidate
 
@@ -139,6 +141,7 @@ class ReviewItem:
 @dataclass(frozen=True)
 class TermSummaryRow:
     term_id: str
+    term_type: str
     term_norm: str
     occurrences_count: int
     files_count: int
@@ -163,3 +166,4 @@ class RelationSummaryRow:
     affix_related_list: str = ""
     affix_delimiters: str = ""
     notes: str = ""
+

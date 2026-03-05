@@ -1,15 +1,15 @@
 import os
-from typing import Any
+import time
 
-from core.kernel import ErrorEvent, EventLogger, ModeIOContract, ProcessingStats, iter_excel_files, open_workbook, safe_to_str
+from core.kernel import ErrorEvent, EventLogger, ModeIOContract, ProcessingStats
 
 from .config import ExtractorConfigLoader
-from .dedup import build_term_aggregates, build_terms_and_occurrences
 from .exporter import TerminologyExcelExporter
-from .extractors import BaseExtractor, ExtractContext, RecordRuleExtractor, TagSpanExtractor
-from .normalize import normalize_candidates
-from .relations import build_relation_summary, build_review_items
-from .types import Candidate, CompoundSplitRule, RecordRule, TagSpanRule, TermEntry, TermSummaryRow
+from .extractors import BaseExtractor, RecordRuleExtractor, TagSpanExtractor
+from .pipeline_aggregate import aggregate_terminology
+from .pipeline_discovery import discover_and_filter_excel_files
+from .pipeline_extract import extract_file_candidates
+from .types import Candidate, CompoundSplitRule, RecordRule, TagSpanRule
 
 
 class TerminologyProcessor:
@@ -34,74 +34,112 @@ class TerminologyProcessor:
         self.output_file = output_file
 
     def process_files(self) -> dict[str, int]:
+        total_started = time.perf_counter()
         self._validate_required_paths()
         self.stats = ProcessingStats()
 
+        config_started = time.perf_counter()
         config = self._config_loader.load(self.rule_config_path)
+        config_ms = _elapsed_ms(config_started)
+
+        versions_scope = ",".join(config.versions) if config.versions else "ALL"
+        files_scope = ",".join(config.files) if config.files else "ALL"
+        self.log(
+            "Loaded terminology config: "
+            f"path={self.rule_config_path}, "
+            f"versions={versions_scope}, "
+            f"files={files_scope}"
+        )
+
         extractors = self._build_extractors(config.extractors)
 
-        discovered_paths = iter_excel_files(
-            self.input_folder,
+        discovery_started = time.perf_counter()
+        discovered_paths, file_paths = discover_and_filter_excel_files(
+            input_folder=self.input_folder,
             extensions=self.io_contract.extensions,
-            include_temp_files=False,
-            case_sensitive=False,
+            configured_files=config.files,
         )
-        file_paths = self._filter_file_paths(discovered_paths, config.files)
+        discovery_ms = _elapsed_ms(discovery_started)
+
         self.stats.files_total = len(file_paths)
         self.log(f"Found {len(discovered_paths)} Excel files, selected {len(file_paths)} by config.files")
 
+        extract_started = time.perf_counter()
         all_candidates: list[Candidate] = []
         candidate_sequence = 0
+        rows_scanned = 0
+        rows_skipped_by_version = 0
+
         for file_path in file_paths:
-            candidates = self._extract_file_candidates(file_path, extractors, config.versions)
-            if candidates is None:
+            try:
+                extract_result = extract_file_candidates(file_path, extractors, config.versions)
+            except Exception as exc:
+                self._log_error(
+                    code="E_TERMINOLOGY_FILE",
+                    message="Failed to process file for terminology extraction",
+                    file_path=file_path,
+                    exc=exc,
+                )
                 self.stats.files_failed += 1
                 continue
+
             self.stats.files_succeeded += 1
-            for candidate in candidates:
+            rows_scanned += extract_result.rows_scanned
+            rows_skipped_by_version += extract_result.rows_skipped_by_version
+
+            for candidate in extract_result.candidates:
                 candidate_sequence += 1
                 candidate.candidate_id = f"C{candidate_sequence:08d}"
-            all_candidates.extend(candidates)
+            all_candidates.extend(extract_result.candidates)
 
-        normalized = normalize_candidates(all_candidates, config.normalization)
-        terms, occurrences, _candidate_to_term_id, dedup_to_term_id, _term_text_to_term_id = build_terms_and_occurrences(normalized)
-        term_by_id = {term.term_id: term for term in terms}
-        review_items, reasons_by_term = build_review_items(
-            terms=terms,
-            occurrences=occurrences,
-            thresholds=config.thresholds,
-        )
-        self._apply_review_reasons(terms, reasons_by_term)
-        term_aggregates = build_term_aggregates(occurrences)
-        terms_summary_rows = self._build_terms_summary_rows(terms, term_aggregates)
-        relations_summary_rows = build_relation_summary(
-            terms=terms,
-            occurrences=occurrences,
-            candidates=all_candidates,
-            normalization_settings=config.normalization,
-            dedup_to_term_id=dedup_to_term_id,
-            term_by_id=term_by_id,
-            affix_delimiters=config.affix_delimiters,
-            case_insensitive_dedup=config.normalization.case_insensitive_dedup,
-        )
+        self.stats.rows_scanned = rows_scanned
+        extract_ms = _elapsed_ms(extract_started)
 
+        aggregate_started = time.perf_counter()
+        aggregate_result = aggregate_terminology(candidates=all_candidates, config=config)
+        aggregate_ms = _elapsed_ms(aggregate_started)
+
+        export_started = time.perf_counter()
         self._exporter.export(
             output_path=self.output_file,
-            terms_summary_rows=terms_summary_rows,
-            relations_summary_rows=relations_summary_rows,
-            review_items=review_items,
-            occurrences=occurrences,
+            terms_summary_rows=aggregate_result.terms_summary_rows,
+            relations_summary_rows=aggregate_result.relations_summary_rows,
+            review_items=aggregate_result.review_items,
+            occurrences=aggregate_result.occurrences,
         )
+        export_ms = _elapsed_ms(export_started)
 
         result = {
             "files_total": self.stats.files_total,
             "files_succeeded": self.stats.files_succeeded,
             "files_failed": self.stats.files_failed,
             "candidates_count": len(all_candidates),
-            "terms_count": len(terms),
-            "relations_count": len(relations_summary_rows),
-            "review_count": len(review_items),
+            "terms_count": len(aggregate_result.terms),
+            "relations_count": len(aggregate_result.relations_summary_rows),
+            "review_count": len(aggregate_result.review_items),
         }
+
+        total_ms = _elapsed_ms(total_started)
+        self.log(
+            "Terminology stage stats: "
+            f"files_discovered={len(discovered_paths)}, "
+            f"files_selected={len(file_paths)}, "
+            f"rows_scanned={rows_scanned}, "
+            f"rows_skipped_by_version={rows_skipped_by_version}, "
+            f"candidates={len(all_candidates)}, "
+            f"normalized={aggregate_result.normalized_count}, "
+            f"body_terms={aggregate_result.body_terms_count}, "
+            f"suffix_terms={aggregate_result.suffix_terms_count}, "
+            f"relations={result['relations_count']}, "
+            f"review={result['review_count']}, "
+            "timings_ms="
+            f"config:{config_ms},"
+            f"discovery:{discovery_ms},"
+            f"extract:{extract_ms},"
+            f"aggregate:{aggregate_ms},"
+            f"export:{export_ms},"
+            f"total:{total_ms}"
+        )
         self.log(
             "Terminology extraction complete: "
             f"files={result['files_succeeded']}/{result['files_total']}, "
@@ -127,31 +165,6 @@ class TerminologyProcessor:
         if not os.path.isfile(self.rule_config_path):
             raise ValueError(f"Rule config not found: {self.rule_config_path}")
 
-    def _filter_file_paths(self, file_paths: list[str], configured_files: tuple[str, ...]) -> list[str]:
-        if not configured_files:
-            return file_paths
-        return [path for path in file_paths if self._is_configured_file(path, configured_files)]
-
-    @staticmethod
-    def _is_configured_file(file_path: str, configured_files: tuple[str, ...]) -> bool:
-        base_name = os.path.basename(file_path).lower()
-        stem = os.path.splitext(base_name)[0]
-
-        for raw_token in configured_files:
-            token = raw_token.strip().lower()
-            if not token:
-                continue
-            token_stem, token_ext = os.path.splitext(token)
-            if token_ext:
-                if base_name == token:
-                    return True
-            else:
-                if stem == token or base_name == token:
-                    return True
-                if token_stem and stem == token_stem:
-                    return True
-        return False
-
     def _build_extractors(self, rules: tuple[RecordRule | TagSpanRule | CompoundSplitRule, ...]) -> list[BaseExtractor]:
         extractors: list[BaseExtractor] = []
         for rule in rules:
@@ -166,131 +179,6 @@ class TerminologyProcessor:
                 raise ValueError(f"Unsupported rule type: {type(rule)}")
         return extractors
 
-    def _extract_file_candidates(
-        self,
-        file_path: str,
-        extractors: list[BaseExtractor],
-        global_versions: tuple[str, ...],
-    ) -> list[Candidate] | None:
-        try:
-            with open_workbook(file_path, read_only=True, data_only=True) as workbook:
-                worksheet = workbook.active
-                header_map = self._build_header_map(worksheet)
-                self._ensure_required_columns(file_path, header_map, extractors, global_versions)
-
-                candidates: list[Candidate] = []
-                for row_idx, row in enumerate(worksheet.iter_rows(min_row=2), start=2):
-                    row_values: dict[str, Any] = {}
-                    row_cells_text: dict[str, str] = {}
-                    for header, col_index in header_map.items():
-                        if col_index < len(row):
-                            cell = row[col_index]
-                            value = cell.value if cell else None
-                        else:
-                            value = None
-                        row_values[header] = value
-                        row_cells_text[header] = safe_to_str(value, strip=False)
-
-                    if global_versions:
-                        version_value = safe_to_str(row_values.get("version"), strip=True)
-                        if version_value not in global_versions:
-                            self.stats.rows_scanned += 1
-                            continue
-
-                    context = ExtractContext(
-                        file_path=file_path,
-                        file_name=os.path.basename(file_path),
-                        sheet_name=worksheet.title,
-                        row_index=row_idx,
-                        row_values=row_values,
-                        row_cells_text=row_cells_text,
-                        header_map=header_map,
-                    )
-                    for extractor in extractors:
-                        candidates.extend(extractor.extract(context))
-                    self.stats.rows_scanned += 1
-
-                return candidates
-        except Exception as exc:
-            self._log_error(
-                code="E_TERMINOLOGY_FILE",
-                message="Failed to process file for terminology extraction",
-                file_path=file_path,
-                exc=exc,
-            )
-            return None
-
-    def _build_header_map(self, worksheet) -> dict[str, int]:
-        header_row = next(worksheet.iter_rows(min_row=1, max_row=1), [])
-        header_map: dict[str, int] = {}
-        fallback_count = 0
-        for index, cell in enumerate(header_row):
-            raw = safe_to_str(cell.value if cell else None, strip=True)
-            header = raw if raw else f"col_{index + 1}"
-            if header in header_map:
-                fallback_count += 1
-                header = f"{header}_{fallback_count}"
-            header_map[header] = index
-
-            # Add a lowercase alias so rule/header matching is case-insensitive
-            # (e.g. "Version" can satisfy required "version").
-            alias = header.lower()
-            if alias not in header_map:
-                header_map[alias] = index
-        return header_map
-
-    def _ensure_required_columns(
-        self,
-        file_path: str,
-        header_map: dict[str, int],
-        extractors: list[BaseExtractor],
-        global_versions: tuple[str, ...],
-    ) -> None:
-        required: set[str] = set()
-        for extractor in extractors:
-            required.update(extractor.required_columns())
-        if global_versions:
-            required.add("version")
-        missing = sorted(col for col in required if col not in header_map)
-        if missing:
-            raise ValueError(
-                f"Missing required columns in file {file_path}: {', '.join(missing)}"
-            )
-
-    def _apply_review_reasons(self, terms: list[TermEntry], reasons_by_term: dict[str, list[str]]) -> None:
-        for term in terms:
-            reasons = reasons_by_term.get(term.term_id, [])
-            term.is_low_confidence = bool(reasons)
-            term.review_reasons = ";".join(reasons)
-
-    @staticmethod
-    def _build_terms_summary_rows(
-        terms: list[TermEntry],
-        term_aggregates: dict[str, dict[str, str | int | set[str]]],
-    ) -> list[TermSummaryRow]:
-        rows: list[TermSummaryRow] = []
-        for term in sorted(terms, key=lambda item: item.term_norm):
-            aggregate = term_aggregates.get(term.term_id, {})
-            files_count = int(aggregate.get("files_count", term.files_count))
-            files_list = str(aggregate.get("files_list", ""))
-            keys_count = int(aggregate.get("keys_count", 0))
-            keys_list = str(aggregate.get("keys_list", ""))
-            rows.append(
-                TermSummaryRow(
-                    term_id=term.term_id,
-                    term_norm=term.term_norm,
-                    occurrences_count=term.occurrences_count,
-                    files_count=files_count,
-                    files_list=files_list,
-                    keys_count=keys_count,
-                    keys_list=keys_list,
-                    first_extractor=term.first_extractor,
-                    is_low_confidence=term.is_low_confidence,
-                    review_reasons=term.review_reasons,
-                )
-            )
-        return rows
-
     def _log_error(self, code: str, message: str, file_path: str = "", exc: Exception | None = None) -> None:
         event = ErrorEvent(
             code=code,
@@ -299,3 +187,7 @@ class TerminologyProcessor:
             exception=exc,
         )
         self.event_logger.error(self.stats, event)
+
+
+def _elapsed_ms(start: float) -> int:
+    return int((time.perf_counter() - start) * 1000)
