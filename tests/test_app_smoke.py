@@ -4,6 +4,21 @@ from unittest.mock import MagicMock, patch
 import app
 
 
+def _startup_dependency_error():
+    required_modules = (
+        "core.excel_processor",
+        "core.multi_column_processor",
+        "core.terminology",
+        "core.untranslated_stats_processor",
+    )
+    for module_name in required_modules:
+        try:
+            __import__(module_name)
+        except ModuleNotFoundError as exc:
+            return str(exc)
+    return None
+
+
 class AppSmokeTestCase(unittest.TestCase):
     @patch("app.ExcelUpdaterApp.init_components")
     @patch("app.ExcelUpdaterApp.init_processors")
@@ -62,6 +77,58 @@ class AppSmokeTestCase(unittest.TestCase):
         mock_setup_style.assert_called_once()
         mock_init_processors.assert_called_once()
         mock_init_components.assert_called_once()
+
+    @patch("app.ExcelUpdaterApp.init_components")
+    @patch("app.ExcelUpdaterApp.setup_style")
+    @patch("app.ttk.Button")
+    @patch("app.ttk.Label")
+    @patch("app.ttk.Frame")
+    @patch("app.ttk.Notebook")
+    @patch("app.tk.StringVar")
+    @patch("app.tk.Tk")
+    def test_app_constructs_with_real_processor_initialization_when_dependencies_are_installed(
+        self,
+        mock_tk,
+        mock_string_var,
+        mock_notebook,
+        mock_status_frame,
+        mock_status_label,
+        mock_view_logs_button,
+        mock_setup_style,
+        mock_init_components,
+    ):
+        dependency_error = _startup_dependency_error()
+        if dependency_error is not None:
+            self.skipTest(f"startup dependencies unavailable: {dependency_error}")
+
+        root = MagicMock()
+        notebook = MagicMock()
+        status_row = MagicMock()
+        status_var = MagicMock()
+        status_label = MagicMock()
+        view_logs_button = MagicMock()
+        mock_tk.return_value = root
+        mock_string_var.return_value = status_var
+        mock_notebook.return_value = notebook
+        mock_status_frame.return_value = status_row
+        mock_status_label.return_value = status_label
+        mock_view_logs_button.return_value = view_logs_button
+
+        instance = app.ExcelUpdaterApp()
+
+        self.assertIsNotNone(instance.excel_processor)
+        self.assertIsNotNone(instance.multi_processor)
+        self.assertIsNotNone(instance.reverse_excel_processor)
+        self.assertIsNotNone(instance.clearer)
+        self.assertIsNotNone(instance.compatibility_processor)
+        self.assertIsNotNone(instance.deep_replace_processor)
+        self.assertIsNotNone(instance.master_merge_processor)
+        self.assertIsNotNone(instance.untranslated_stats_processor)
+        self.assertIsNotNone(instance.terminology_processor)
+        self.assertIsInstance(instance.task_runner, app.TkSingleTaskRunner)
+        mock_setup_style.assert_called_once()
+        mock_init_components.assert_called_once()
+        root.after.assert_called_once()
 
     def test_registry_contains_expected_tabs_and_no_multi_tab(self):
         instance = app.ExcelUpdaterApp.__new__(app.ExcelUpdaterApp)
