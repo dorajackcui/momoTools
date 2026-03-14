@@ -20,15 +20,6 @@ from controllers import (
     UntranslatedStatsController,
     UpdaterController,
 )
-from core.deep_replace_processor import DeepReplaceProcessor
-from core.excel_cleaner import ExcelColumnClearer
-from core.excel_compatibility_processor import ExcelCompatibilityProcessor
-from core.excel_processor import ExcelProcessor
-from core.multi_column_processor import MultiColumnExcelProcessor
-from core.reverse_excel_processor import ReverseExcelProcessor
-from core.master_merge_processor import MasterMergeProcessor
-from core.terminology import TerminologyProcessor
-from core.untranslated_stats_processor import UntranslatedStatsProcessor
 from controller_modules.task_runner import TkSingleTaskRunner
 from ui.theme import APP_BG, configure_ttk_style
 from ui.widgets.log_window import LogWindow
@@ -100,6 +91,16 @@ class ExcelUpdaterApp:
         configure_ttk_style()
 
     def init_processors(self):
+        from core.deep_replace_processor import DeepReplaceProcessor
+        from core.excel_cleaner import ExcelColumnClearer
+        from core.excel_compatibility_processor import ExcelCompatibilityProcessor
+        from core.excel_processor import ExcelProcessor
+        from core.master_merge_processor import MasterMergeProcessor
+        from core.multi_column_processor import MultiColumnExcelProcessor
+        from core.reverse_excel_processor import ReverseExcelProcessor
+        from core.terminology import TerminologyProcessor
+        from core.untranslated_stats_processor import UntranslatedStatsProcessor
+
         self.excel_processor = ExcelProcessor(self._emit_log)
         self.clearer = ExcelColumnClearer()
         self.clearer.set_log_callback(self._emit_log)

@@ -1,8 +1,20 @@
 ﻿import os
 
-import win32com.client
-
 from core.kernel import ErrorEvent, EventLogger, ModeIOContract, ProcessingStats, iter_excel_files
+
+
+COM_DEPENDENCY_ERROR = (
+    "pywin32 is required for Excel COM tools. "
+    "Install requirements.txt on Windows and run with Microsoft Excel available."
+)
+
+
+def _load_win32com_client():
+    try:
+        import win32com.client as win32_client
+    except ModuleNotFoundError as exc:
+        raise RuntimeError(COM_DEPENDENCY_ERROR) from exc
+    return win32_client
 
 
 class ExcelColumnClearer:
@@ -33,7 +45,7 @@ class ExcelColumnClearer:
 
     def _init_excel(self):
         if not self.excel:
-            self.excel = win32com.client.Dispatch("Excel.Application")
+            self.excel = _load_win32com_client().Dispatch("Excel.Application")
             self.excel.Visible = False
             self.excel.DisplayAlerts = False
 

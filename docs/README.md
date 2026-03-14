@@ -1,65 +1,64 @@
-# Docs Canonical Index
+# Docs Guide
 
-Last updated: 2026-03-03
-Audience: agents and engineers
-Purpose: single source-of-truth navigation for maintainable docs
+## Start Here
 
-## Core Docs (Canonical, 6)
+If you are new to the repo:
 
-1. `docs/README.md` (this index, ownership and update rules)
-2. `docs/ARCHITECTURE.md` (stable boundaries + refactor guardrails)
-3. `docs/SESSION_DUMP.md` (current runtime snapshot)
-4. `docs/IO_FORMAT_REQUIREMENTS.md` (IO behavior contract)
-5. `docs/terminology_rule_config_notes.md` (terminology config contract)
-6. `docs/troubleshooting.md` (operational diagnosis)
+- Read the root `README.md` for install, startup, and high-level risks.
+- Read `docs/architecture.md` to understand layer boundaries and runtime shape.
+- Read `docs/testing.md` before changing code so you know which checks are expected.
 
-## Non-core Docs (Kept)
+If you are about to change behavior:
 
-1. `docs/PRIVATE_TEST_DATA_POLICY.md` (private local fixture policy)
-2. `docs/sample_terminology_rules.json` (config sample)
-3. `docs/archive/*` (historical references only)
+- Read `docs/io-contract.md` for workbook read/write semantics.
+- Read `docs/decisions.md` for stable mode policies and compatibility constraints.
+- Check whether the relevant subsystem also has a local `AGENTS.md`:
+  - `core/master_update/AGENTS.md`
+  - `core/terminology/AGENTS.md`
+  - `ui/AGENTS.md`
 
-## Fast Path
+## By Task
 
-Read in order:
+- Understand app structure and allowed dependencies: `docs/architecture.md`
+- Change workbook matching, normalization, blank handling, or write rules: `docs/io-contract.md`
+- Set up an environment or decide what should work without Windows/Excel: `docs/development.md`
+- Pick the right test command for a change: `docs/testing.md`
+- Package or validate a Windows desktop build: `docs/deployment.md`
+- Confirm stable behavioral decisions and known gaps: `docs/decisions.md`
+- Inspect terminology config examples: `docs/sample_terminology_rules.json`
 
-1. `docs/ARCHITECTURE.md`
-2. `docs/SESSION_DUMP.md`
-3. `docs/IO_FORMAT_REQUIREMENTS.md`
+## Source Of Truth
 
-## Source-of-Truth Ownership
+- `docs/architecture.md`
+  - Layering, runtime model, tool group layout, compatibility boundaries
+- `docs/io-contract.md`
+  - Excel normalization, blank detection, row identity, mode-specific write behavior
+- `docs/development.md`
+  - Environment matrix, setup workflow, quick verification defaults
+- `docs/testing.md`
+  - Command selection, environment caveats, change-oriented test matrix
+- `docs/deployment.md`
+  - Packaging constraints and release validation expectations
+- `docs/decisions.md`
+  - Stable policies that should not drift silently
 
-| Topic | Owner doc |
-| --- | --- |
-| Layering, dependencies, compatibility, refactor boundaries | `docs/ARCHITECTURE.md` |
-| Runtime UI/task/logging snapshot | `docs/SESSION_DUMP.md` |
-| Excel IO semantics and special-value behavior | `docs/IO_FORMAT_REQUIREMENTS.md` |
-| Terminology config and relation-output contract | `docs/terminology_rule_config_notes.md` |
-| Runtime troubleshooting playbook | `docs/troubleshooting.md` |
-| Private fixture safety policy | `docs/PRIVATE_TEST_DATA_POLICY.md` |
+Avoid restating the same rule in multiple active docs. Link back to the owning doc instead.
 
-## Policy Decision Tracking
+## Doc Update Rules
 
-Open product/business policy decisions are not maintained in `docs/`.  
-Track them in external issue/task systems and link them from PRs when relevant.
+- Changing workbook IO semantics:
+  - Update `docs/io-contract.md`
+  - Run `python scripts/run_regression_suite.py --with-golden`
+- Changing app structure, layer boundaries, or task-runner behavior:
+  - Update `docs/architecture.md`
+- Changing environment assumptions, setup steps, or what works without COM:
+  - Update `docs/development.md`
+  - Update `docs/testing.md` if the expected validation path changes
+- Changing validation expectations:
+  - Update `docs/testing.md`
+- Changing packaging or release constraints:
+  - Update `docs/deployment.md`
+- Changing a stable business rule or mode policy:
+  - Update `docs/decisions.md`
 
-## Command Entry (Canonical)
-
-```bash
-python -m py_compile app.py controllers.py ui_components.py
-python -m unittest discover -s tests -p "test_*.py"
-python scripts/run_regression_suite.py --with-golden
-python scripts/run_perf_baseline.py
-python -m unittest tests.test_private_data_skip_blank_write -v
-```
-
-## Update Rules
-
-1. Update the owner doc in the same change set whenever behavior changes.
-2. Keep each truth in one place only; avoid cross-file duplication.
-3. Move outdated narrative docs to `docs/archive/*`.
-4. Validate docs encoding before commit:
-
-```bash
-python scripts/check_text_encoding.py --root docs
-```
+Historical or superseded material belongs in `archive/old_docs/`, not in active docs.

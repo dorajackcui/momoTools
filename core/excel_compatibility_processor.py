@@ -1,6 +1,18 @@
-﻿from win32com.client import Dispatch
+﻿from core.kernel import ErrorEvent, EventLogger, ModeIOContract, ProcessingStats, iter_excel_files
 
-from core.kernel import ErrorEvent, EventLogger, ModeIOContract, ProcessingStats, iter_excel_files
+
+COM_DEPENDENCY_ERROR = (
+    "pywin32 is required for Excel COM tools. "
+    "Install requirements.txt on Windows and run with Microsoft Excel available."
+)
+
+
+def _load_dispatch():
+    try:
+        from win32com.client import Dispatch
+    except ModuleNotFoundError as exc:
+        raise RuntimeError(COM_DEPENDENCY_ERROR) from exc
+    return Dispatch
 
 
 class ExcelCompatibilityProcessor:
@@ -51,7 +63,7 @@ class ExcelCompatibilityProcessor:
         excel_app = None
 
         try:
-            excel_app = Dispatch("Excel.Application")
+            excel_app = _load_dispatch()("Excel.Application")
             excel_app.Visible = False
             excel_app.DisplayAlerts = False
 
