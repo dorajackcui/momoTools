@@ -58,7 +58,7 @@ Not allowed:
 
 The current UI organizes tools into three notebook groups:
 
-- Main Tools
+- Content Sync
   - `Master->Target`
   - `Target->Master`
   - `Batch`
@@ -69,9 +69,9 @@ The current UI organizes tools into three notebook groups:
   - `Untranslated Stats`
   - `Term Extractor`
 - Update Master
-  - `Merge`
-  - `Apply Updates`
-  - `Update Existing`
+  - `Merge Masters`
+  - `Source Text`
+  - `Translation`
 
 ## Observability
 

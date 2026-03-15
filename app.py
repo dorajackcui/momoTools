@@ -188,7 +188,7 @@ class ExcelUpdaterApp:
             ),
             ToolSpec(
                 group="update_master",
-                tab_text="Merge",
+                tab_text="Merge Masters",
                 controller_factory=lambda app: MasterMergeController(
                     None,
                     app.master_merge_processor,
@@ -198,7 +198,7 @@ class ExcelUpdaterApp:
             ),
             ToolSpec(
                 group="update_master",
-                tab_text="Apply Updates",
+                tab_text="Source Text",
                 controller_factory=lambda app: UpdateMasterController(
                     None,
                     app.master_merge_processor,
@@ -208,7 +208,7 @@ class ExcelUpdaterApp:
             ),
             ToolSpec(
                 group="update_master",
-                tab_text="Update Existing",
+                tab_text="Translation",
                 controller_factory=lambda app: UpdateContentController(
                     None,
                     app.master_merge_processor,
@@ -224,7 +224,7 @@ class ExcelUpdaterApp:
             "utilities": ttk.Frame(self.notebook),
             "update_master": ttk.Frame(self.notebook),
         }
-        self.notebook.add(top_group_frames["main"], text="Main Tools")
+        self.notebook.add(top_group_frames["main"], text="Content Sync")
         self.notebook.add(top_group_frames["utilities"], text="Utilities")
         self.notebook.add(top_group_frames["update_master"], text="Master Update")
 

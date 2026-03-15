@@ -172,9 +172,9 @@ class AppSmokeTestCase(unittest.TestCase):
                 "Deep Replace",
                 "Untranslated Stats",
                 "Term Extractor",
-                "Merge",
-                "Apply Updates",
-                "Update Existing",
+                "Merge Masters",
+                "Source Text",
+                "Translation",
             ],
         )
         self.assertNotIn("Multi Column", [spec.tab_text for spec in specs])

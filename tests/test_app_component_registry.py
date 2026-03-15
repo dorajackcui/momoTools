@@ -214,7 +214,7 @@ class AppComponentRegistryTestCase(unittest.TestCase):
 
         self.assertEqual(
             [call.kwargs["text"] for call in instance.notebook.add.call_args_list],
-            ["Main Tools", "Utilities", "Master Update"],
+            ["Content Sync", "Utilities", "Master Update"],
         )
         self.assertEqual(
             [call.kwargs["text"] for call in main_notebook.add.call_args_list],
@@ -226,7 +226,7 @@ class AppComponentRegistryTestCase(unittest.TestCase):
         )
         self.assertEqual(
             [call.kwargs["text"] for call in update_master_notebook.add.call_args_list],
-            ["Merge", "Apply Updates", "Update Existing"],
+            ["Merge Masters", "Source Text", "Translation"],
         )
 
         self.assertEqual(len(RecordingUpdaterController.instances), 1)
