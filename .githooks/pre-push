@@ -1,2 +1,2 @@
 #!/bin/sh
-python scripts/git_hooks/block_private_data.py --mode pre-push
+py -3 scripts/git_hooks/block_private_data.py --mode pre-push
