@@ -127,6 +127,7 @@ Mode behavior:
   - source rows are treated as complete rows
   - allows new keys
   - default identity is `combined_key`, with UI support for `key_only`
+  - when `key_only` is selected, source rows still require a non-blank `match_col` value; rows with blank match cells are skipped instead of appended
   - duplicate source identities keep the first processed full row
 - `Update Master`
   - dense-row overwrite
@@ -143,6 +144,7 @@ Mode behavior:
 Match-column behavior:
 
 - in `Merge Masters`, `match_col` is written only for appended rows
+- in `Merge Masters` with `key_only`, `match_col` is still a required non-blank source field for row admission
 - in `Update Master`, `match_col` is treated as updatable content
 - in `Update Content`, `match_col` stays part of row identity and is not updated as content
 

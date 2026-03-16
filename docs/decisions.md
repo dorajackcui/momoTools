@@ -25,6 +25,7 @@ This directory is the canonical home for active project documentation. Historica
   - append-oriented flow
   - allows new keys
   - supports `combined_key` or `key_only`
+  - when `key_only` is used, source rows with blank `match` are skipped
   - keeps first-processed duplicate source row for the same identity
 - `Update Master`
   - dense-row overwrite behavior

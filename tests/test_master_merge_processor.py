@@ -272,6 +272,42 @@ class MasterMergeProcessorTestCase(unittest.TestCase):
         self.assertEqual(result.filled_blank_cells, 0)
         self.assertEqual(read_row(master_path, 2, 3), ["K1", None, None])
 
+    def test_merge_key_only_mode_skips_new_rows_with_blank_match(self):
+        master_path = self.root / "master.xlsx"
+        updates_dir = self.root / "updates"
+        updates_dir.mkdir()
+
+        write_workbook(
+            master_path,
+            [
+                ["key", "match", "v1"],
+            ],
+        )
+        source_path = updates_dir / "source.xlsx"
+        write_workbook(
+            source_path,
+            [
+                ["key", "match", "v1"],
+                ["K1", "", "SKIP_ME"],
+                ["K2", "M2", "APPEND_ME"],
+            ],
+        )
+
+        processor = self._build_processor(master_path, updates_dir, [source_path])
+        processor.set_row_key_policy(ROW_KEY_POLICY_KEY_ONLY)
+        processor.set_policies(
+            cell_write_policy=CELL_WRITE_POLICY_FILL_BLANK_ONLY,
+            key_admission_policy=KEY_ADMISSION_POLICY_ALLOW_NEW,
+            priority_winner_policy=PRIORITY_WINNER_POLICY_LAST_PROCESSED,
+        )
+
+        result = processor.process_files()
+
+        self.assertEqual(result.updated_cells, 0)
+        self.assertEqual(result.added_rows, 1)
+        self.assertEqual(result.filled_blank_cells, 0)
+        self.assertEqual(read_row(master_path, 2, 3), ["K2", "M2", "APPEND_ME"])
+
     def test_update_master_forces_key_only_and_overwrites_match(self):
         master_path = self.root / "master.xlsx"
         updates_dir = self.root / "updates"
@@ -574,3 +610,4 @@ class MasterMergeProcessorTestCase(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+

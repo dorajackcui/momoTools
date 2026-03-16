@@ -16,6 +16,7 @@ Treat this directory as the implementation home for row identity policy, source 
   - append-oriented
   - allows new keys
   - supports `combined_key` or `key_only`
+  - when `key_only` is selected, source rows with blank `match` are skipped
   - duplicate source identities keep the first processed full row
 - `Update Master`
   - dense-row overwrite

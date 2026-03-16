@@ -2,7 +2,7 @@ import os
 from time import perf_counter
 from typing import Any, Sequence
 
-from core.kernel import open_workbook, safe_to_str
+from core.kernel import is_blank_value, open_workbook, safe_to_str
 from core.master_update.executors.base import BaseMasterUpdateExecutor
 from core.master_update.policies import ROW_KEY_POLICY_COMBINED
 from core.master_update.source_collectors import (
@@ -11,6 +11,12 @@ from core.master_update.source_collectors import (
 
 
 class MergeMastersExecutor(BaseMasterUpdateExecutor):
+    def _has_required_match_value(self, row_values: Sequence[Any]) -> bool:
+        if self.processor.row_key_policy == ROW_KEY_POLICY_COMBINED:
+            return True
+        match_value = row_values[self.match_col] if self.match_col < len(row_values) else None
+        return not is_blank_value(match_value)
+
     def run(self, source_files: Sequence[str]):
         total_start = perf_counter()
         max_col, _ = self.resolve_layout()
@@ -141,6 +147,8 @@ class MergeMastersExecutor(BaseMasterUpdateExecutor):
                         max_col=max_col,
                         values_only=True,
                     ):
+                        if not self._has_required_match_value(row_values):
+                            continue
                         identity_key = build_identity_key_from_values(
                             row_values=row_values,
                             key_col=self.key_col,
