@@ -7,6 +7,8 @@ from unittest.mock import patch
 from controllers import (
     BatchController,
     ClearerController,
+    CompatibilityController,
+    DeepReplaceController,
     MasterMergeController,
     ReverseUpdaterController,
     UpdateContentController,
@@ -14,6 +16,7 @@ from controllers import (
     UntranslatedStatsController,
     UpdaterController,
 )
+from controller_modules.path_preflight import ExcelFolderProbeResult
 from core.batch_config import (
     BatchConfigV1,
     BatchDefaultsSingle,
@@ -73,6 +76,10 @@ class FakeDialogs:
         self.confirms.append((title, message))
         return self.confirm_result
 
+    def confirm_file_list(self, parent, title, file_paths, summary_lines, warning_message=None):
+        self.confirms.append((title, list(file_paths), list(summary_lines), warning_message))
+        return self.confirm_result
+
 
 class FakeUpdaterFrame:
     def __init__(self, config):
@@ -102,6 +109,7 @@ class FakeSingleUpdaterProcessor:
         self.allow_blank_write = None
         self.post_process_enabled = None
         self.processed = False
+        self.listed_files = ["C:/tmp/a.xlsx"]
 
     def set_master_file(self, path):
         self.master_file = path
@@ -128,6 +136,9 @@ class FakeSingleUpdaterProcessor:
         self.processed = True
         return 11
 
+    def list_target_files(self, _folder_path=None):
+        return list(self.listed_files)
+
 
 class FakeMultiUpdaterProcessor:
     def __init__(self):
@@ -144,6 +155,7 @@ class FakeMultiUpdaterProcessor:
         self.allow_blank_write = None
         self.post_process_enabled = None
         self.processed = False
+        self.listed_files = ["C:/tmp/a.xlsx"]
 
     def set_master_file(self, path):
         self.master_file = path
@@ -185,19 +197,25 @@ class FakeMultiUpdaterProcessor:
         self.processed = True
         return 27
 
+    def list_target_files(self, _folder_path=None):
+        return list(self.listed_files)
+
 
 class FakeReverseProcessor:
     def __init__(self):
+        self.master_file = None
+        self.target_folder = None
         self.target_cols = None
         self.master_cols = None
         self.fill_blank_only = None
         self.allow_blank_write = None
+        self.listed_files = ["C:/tmp/a.xlsx"]
 
-    def set_master_file(self, _path):
-        pass
+    def set_master_file(self, path):
+        self.master_file = path
 
-    def set_target_folder(self, _path):
-        pass
+    def set_target_folder(self, path):
+        self.target_folder = path
 
     def set_target_columns(self, a, b, c):
         self.target_cols = (a, b, c)
@@ -213,6 +231,9 @@ class FakeReverseProcessor:
 
     def process_files(self):
         return 3
+
+    def list_target_files(self, _folder_path=None):
+        return list(self.listed_files)
 
 
 class FakeClearerFrame:
@@ -232,6 +253,7 @@ class FakeClearerProcessor:
         self.folder_path = None
         self.column_number = None
         self.deleted_called = False
+        self.listed_files = ["C:/tmp/a.xlsx"]
 
     def set_folder_path(self, path):
         self.folder_path = path
@@ -247,6 +269,67 @@ class FakeClearerProcessor:
 
     def delete_column_in_files(self):
         self.deleted_called = True
+        return 1
+
+    def list_target_files(self, _folder_path=None):
+        return list(self.listed_files)
+
+
+class FakeCompatibilityFrame:
+    def __init__(self):
+        self.selected_folder = ""
+
+    def set_target_folder_label(self, path):
+        self.selected_folder = path
+
+
+class FakeCompatibilityProcessor:
+    def __init__(self):
+        self.folder_path = None
+        self.processed = False
+        self.listed_files = ["C:/tmp/a.xlsx"]
+
+    def set_folder_path(self, path):
+        self.folder_path = path
+
+    def list_target_files(self, _folder_path=None):
+        return list(self.listed_files)
+
+    def process_files(self):
+        self.processed = True
+        return 2
+
+
+class FakeDeepReplaceFrame:
+    def __init__(self):
+        self.selected_source_folder = ""
+        self.selected_target_folder = ""
+
+    def set_source_folder_label(self, path):
+        self.selected_source_folder = path
+
+    def set_target_folder_label(self, path):
+        self.selected_target_folder = path
+
+
+class FakeDeepReplaceProcessor:
+    def __init__(self):
+        self.source_folder = None
+        self.target_folder = None
+        self.processed = False
+        self.listed_files = ["C:/tmp/a.xlsx"]
+
+    def set_source_folder(self, path):
+        self.source_folder = path
+
+    def set_target_folder(self, path):
+        self.target_folder = path
+
+    def list_target_files(self, _folder_path=None):
+        return list(self.listed_files)
+
+    def process_files(self):
+        self.processed = True
         return 1
 
 
@@ -304,7 +387,7 @@ class FakeMergeProcessor:
     def set_row_key_policy(self, row_key_policy):
         self.row_key_policy = row_key_policy
 
-    def list_update_files(self):
+    def list_update_files(self, _folder_path=None):
         return list(self.listed_files)
 
     def process_files(self):
@@ -449,9 +532,31 @@ class FakeStateStore:
 class FakeNoopProcessor:
     def __init__(self):
         self.log_callback = None
+        self.listed_files_by_folder = {}
+
+    def list_target_files(self, folder_path=None):
+        folder_key = folder_path or ""
+        return list(self.listed_files_by_folder.get(folder_key, ["sample.xlsx"]))
 
 
 class ControllersTestCase(unittest.TestCase):
+    def _assert_update_folder_selection_allows_empty_folder(self, controller_cls):
+        config = MergeMastersConfig(key_col=1, match_col=2, last_update_col=10, priority_files=tuple())
+        frame = FakeMergeFrame(config)
+        processor = FakeMergeProcessor()
+        dialogs = FakeDialogs(confirm_result=False)
+        controller = controller_cls(frame, processor, dialog_service=dialogs)
+
+        with patch("controllers.filedialog.askdirectory", return_value="C:/tmp"):
+            controller.select_update_folder()
+
+        self.assertEqual(controller.update_folder, "C:/tmp")
+        self.assertEqual(frame.selected_folder, "C:/tmp")
+        self.assertEqual(processor.update_folder, "C:/tmp")
+        self.assertEqual(frame.priority_files, [])
+        self.assertFalse(dialogs.errors)
+        self.assertFalse(dialogs.confirms)
+
     def test_updater_controller_single_path_success(self):
         config = UpdaterConfig(0, 1, 2, 1, 2, 3, 1, True, False, allow_blank_write=True)
         frame = FakeUpdaterFrame(config)
@@ -532,7 +637,7 @@ class ControllersTestCase(unittest.TestCase):
             controller.master_file_path = master_path
             controller.target_folder = target_folder
 
-            with patch("controller_modules.base.open", side_effect=PermissionError("locked")):
+            with patch("controller_modules.path_preflight.open", side_effect=PermissionError("locked")):
                 controller.process_files()
 
         self.assertFalse(single.processed)
@@ -568,6 +673,30 @@ class ControllersTestCase(unittest.TestCase):
         self.assertEqual(controller.update_folder, "C:/tmp")
         self.assertEqual(processor.update_folder, "C:/tmp")
         self.assertEqual(frame.priority_files, ["C:/tmp/a.xlsx", "C:/tmp/b.xlsx"])
+
+    def test_merge_controller_allows_empty_update_folder_selection(self):
+        self._assert_update_folder_selection_allows_empty_folder(MasterMergeController)
+
+    def test_update_master_controller_allows_empty_update_folder_selection(self):
+        self._assert_update_folder_selection_allows_empty_folder(UpdateMasterController)
+
+    def test_update_content_controller_allows_empty_update_folder_selection(self):
+        self._assert_update_folder_selection_allows_empty_folder(UpdateContentController)
+
+    def test_merge_controller_cancel_folder_confirm_keeps_previous_state(self):
+        config = MergeMastersConfig(key_col=1, match_col=2, last_update_col=10, priority_files=("a.xlsx",))
+        frame = FakeMergeFrame(config)
+        processor = FakeMergeProcessor()
+        processor.listed_files = ["C:/tmp/a.xlsx", "C:/tmp/b.xlsx"]
+        dialogs = FakeDialogs(confirm_result=False)
+        controller = MasterMergeController(frame, processor, dialog_service=dialogs)
+
+        with patch("controllers.filedialog.askdirectory", return_value="C:/tmp"):
+            controller.select_update_folder()
+
+        self.assertEqual(controller.update_folder, "")
+        self.assertEqual(processor.update_folder, None)
+        self.assertEqual(frame.priority_files, [])
 
     def test_merge_controller_process_applies_config_and_reports_summary(self):
         config = MergeMastersConfig(
@@ -665,6 +794,218 @@ class ControllersTestCase(unittest.TestCase):
         self.assertEqual(processor.column_number, 5)
         self.assertFalse(processor.deleted_called)
         self.assertTrue(dialogs.confirms)
+
+    def test_clearer_select_folder_confirms_before_commit(self):
+        frame = FakeClearerFrame(ClearerConfig(column_number=5))
+        processor = FakeClearerProcessor()
+        dialogs = FakeDialogs(confirm_result=True)
+        controller = ClearerController(frame, processor, dialog_service=dialogs)
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            target_folder = os.path.join(temp_dir, "targets")
+            os.makedirs(target_folder)
+            sample_path = os.path.join(target_folder, "a.xlsx")
+            with open(sample_path, "w", encoding="utf-8") as handle:
+                handle.write("placeholder")
+            processor.listed_files = [sample_path]
+
+            with patch("controllers.filedialog.askdirectory", return_value=target_folder):
+                controller.select_clearer_folder()
+
+        self.assertEqual(controller.target_folder, target_folder)
+        self.assertEqual(frame.selected_folder, target_folder)
+        self.assertEqual(processor.folder_path, target_folder)
+        self.assertTrue(dialogs.confirms)
+
+    def test_clearer_select_folder_cancel_keeps_old_state(self):
+        frame = FakeClearerFrame(ClearerConfig(column_number=5))
+        processor = FakeClearerProcessor()
+        dialogs = FakeDialogs(confirm_result=False)
+        controller = ClearerController(frame, processor, dialog_service=dialogs)
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            target_folder = os.path.join(temp_dir, "targets")
+            os.makedirs(target_folder)
+            sample_path = os.path.join(target_folder, "a.xlsx")
+            with open(sample_path, "w", encoding="utf-8") as handle:
+                handle.write("placeholder")
+            processor.listed_files = [sample_path]
+
+            with patch("controllers.filedialog.askdirectory", return_value=target_folder):
+                controller.select_clearer_folder()
+
+        self.assertEqual(controller.target_folder, "")
+        self.assertEqual(frame.selected_folder, "")
+        self.assertIsNone(processor.folder_path)
+
+    def test_clearer_select_folder_readonly_sample_blocks_commit(self):
+        frame = FakeClearerFrame(ClearerConfig(column_number=5))
+        processor = FakeClearerProcessor()
+        dialogs = FakeDialogs(confirm_result=True)
+        controller = ClearerController(frame, processor, dialog_service=dialogs)
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            target_folder = os.path.join(temp_dir, "targets")
+            os.makedirs(target_folder)
+            sample_path = os.path.join(target_folder, "a.xlsx")
+            with open(sample_path, "w", encoding="utf-8") as handle:
+                handle.write("placeholder")
+            processor.listed_files = [sample_path]
+
+            with patch("controllers.filedialog.askdirectory", return_value=target_folder):
+                with patch("controller_modules.path_preflight.open", side_effect=PermissionError("locked")):
+                    controller.select_clearer_folder()
+
+        self.assertEqual(controller.target_folder, "")
+        self.assertEqual(frame.selected_folder, "")
+        self.assertIsNone(processor.folder_path)
+        self.assertTrue(dialogs.warnings)
+
+    def test_compatibility_select_folder_confirms_before_commit(self):
+        frame = FakeCompatibilityFrame()
+        processor = FakeCompatibilityProcessor()
+        dialogs = FakeDialogs(confirm_result=True)
+        controller = CompatibilityController(frame, processor, dialog_service=dialogs)
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            target_folder = os.path.join(temp_dir, "targets")
+            os.makedirs(target_folder)
+            sample_path = os.path.join(target_folder, "a.xlsx")
+            with open(sample_path, "w", encoding="utf-8") as handle:
+                handle.write("placeholder")
+            processor.listed_files = [sample_path]
+
+            with patch("controllers.filedialog.askdirectory", return_value=target_folder):
+                controller.select_compatibility_folder()
+
+        self.assertEqual(controller.target_folder, target_folder)
+        self.assertEqual(frame.selected_folder, target_folder)
+        self.assertEqual(processor.folder_path, target_folder)
+        self.assertTrue(dialogs.confirms)
+
+    def test_compatibility_select_folder_cancel_keeps_old_state(self):
+        frame = FakeCompatibilityFrame()
+        processor = FakeCompatibilityProcessor()
+        dialogs = FakeDialogs(confirm_result=False)
+        controller = CompatibilityController(frame, processor, dialog_service=dialogs)
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            target_folder = os.path.join(temp_dir, "targets")
+            os.makedirs(target_folder)
+            sample_path = os.path.join(target_folder, "a.xlsx")
+            with open(sample_path, "w", encoding="utf-8") as handle:
+                handle.write("placeholder")
+            processor.listed_files = [sample_path]
+
+            with patch("controllers.filedialog.askdirectory", return_value=target_folder):
+                controller.select_compatibility_folder()
+
+        self.assertEqual(controller.target_folder, "")
+        self.assertEqual(frame.selected_folder, "")
+        self.assertIsNone(processor.folder_path)
+
+    def test_compatibility_select_folder_readonly_sample_blocks_commit(self):
+        frame = FakeCompatibilityFrame()
+        processor = FakeCompatibilityProcessor()
+        dialogs = FakeDialogs(confirm_result=True)
+        controller = CompatibilityController(frame, processor, dialog_service=dialogs)
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            target_folder = os.path.join(temp_dir, "targets")
+            os.makedirs(target_folder)
+            sample_path = os.path.join(target_folder, "a.xlsx")
+            with open(sample_path, "w", encoding="utf-8") as handle:
+                handle.write("placeholder")
+            processor.listed_files = [sample_path]
+
+            with patch("controllers.filedialog.askdirectory", return_value=target_folder):
+                with patch("controller_modules.path_preflight.open", side_effect=PermissionError("locked")):
+                    controller.select_compatibility_folder()
+
+        self.assertEqual(controller.target_folder, "")
+        self.assertEqual(frame.selected_folder, "")
+        self.assertIsNone(processor.folder_path)
+        self.assertTrue(dialogs.warnings)
+
+    def test_deep_replace_source_folder_keeps_direct_commit(self):
+        frame = FakeDeepReplaceFrame()
+        processor = FakeDeepReplaceProcessor()
+        dialogs = FakeDialogs(confirm_result=False)
+        controller = DeepReplaceController(frame, processor, dialog_service=dialogs)
+
+        with patch("controllers.filedialog.askdirectory", return_value="C:/tmp/source"):
+            controller.select_source_folder()
+
+        self.assertEqual(controller.source_folder, "C:/tmp/source")
+        self.assertEqual(frame.selected_source_folder, "C:/tmp/source")
+        self.assertEqual(processor.source_folder, "C:/tmp/source")
+        self.assertFalse(dialogs.confirms)
+
+    def test_deep_replace_target_folder_confirms_before_commit(self):
+        frame = FakeDeepReplaceFrame()
+        processor = FakeDeepReplaceProcessor()
+        dialogs = FakeDialogs(confirm_result=True)
+        controller = DeepReplaceController(frame, processor, dialog_service=dialogs)
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            target_folder = os.path.join(temp_dir, "targets")
+            os.makedirs(target_folder)
+            sample_path = os.path.join(target_folder, "a.xlsx")
+            with open(sample_path, "w", encoding="utf-8") as handle:
+                handle.write("placeholder")
+            processor.listed_files = [sample_path]
+
+            with patch("controllers.filedialog.askdirectory", return_value=target_folder):
+                controller.select_target_folder()
+
+        self.assertEqual(controller.target_folder, target_folder)
+        self.assertEqual(frame.selected_target_folder, target_folder)
+        self.assertEqual(processor.target_folder, target_folder)
+        self.assertTrue(dialogs.confirms)
+
+    def test_deep_replace_target_folder_cancel_keeps_old_state(self):
+        frame = FakeDeepReplaceFrame()
+        processor = FakeDeepReplaceProcessor()
+        dialogs = FakeDialogs(confirm_result=False)
+        controller = DeepReplaceController(frame, processor, dialog_service=dialogs)
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            target_folder = os.path.join(temp_dir, "targets")
+            os.makedirs(target_folder)
+            sample_path = os.path.join(target_folder, "a.xlsx")
+            with open(sample_path, "w", encoding="utf-8") as handle:
+                handle.write("placeholder")
+            processor.listed_files = [sample_path]
+
+            with patch("controllers.filedialog.askdirectory", return_value=target_folder):
+                controller.select_target_folder()
+
+        self.assertEqual(controller.target_folder, "")
+        self.assertEqual(frame.selected_target_folder, "")
+        self.assertIsNone(processor.target_folder)
+
+    def test_deep_replace_target_folder_readonly_sample_blocks_commit(self):
+        frame = FakeDeepReplaceFrame()
+        processor = FakeDeepReplaceProcessor()
+        dialogs = FakeDialogs(confirm_result=True)
+        controller = DeepReplaceController(frame, processor, dialog_service=dialogs)
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            target_folder = os.path.join(temp_dir, "targets")
+            os.makedirs(target_folder)
+            sample_path = os.path.join(target_folder, "a.xlsx")
+            with open(sample_path, "w", encoding="utf-8") as handle:
+                handle.write("placeholder")
+            processor.listed_files = [sample_path]
+
+            with patch("controllers.filedialog.askdirectory", return_value=target_folder):
+                with patch("controller_modules.path_preflight.open", side_effect=PermissionError("locked")):
+                    controller.select_target_folder()
+
+        self.assertEqual(controller.target_folder, "")
+        self.assertEqual(frame.selected_target_folder, "")
+        self.assertIsNone(processor.target_folder)
+        self.assertTrue(dialogs.warnings)
 
     def test_stats_select_target_folder_auto_output_parent_level(self):
         config = StatsConfig(source_col=1, translation_col=2, stats_mode="chinese_chars")
@@ -791,6 +1132,121 @@ class ControllersTestCase(unittest.TestCase):
         self.assertEqual(single.master_file, "C:/tmp/master.xlsx")
         self.assertEqual(multi.master_file, "C:/tmp/master.xlsx")
 
+    def test_updater_select_master_file_locked_warns_but_keeps_selection(self):
+        frame = FakeUpdaterFrame(
+            UpdaterConfig(0, 1, 2, 1, 2, 3, 1, False, True),
+        )
+        single = FakeSingleUpdaterProcessor()
+        multi = FakeMultiUpdaterProcessor()
+        dialogs = FakeDialogs()
+        controller = UpdaterController(frame, single, multi, dialog_service=dialogs)
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            master_path = os.path.join(temp_dir, "master.xlsx")
+            with open(master_path, "w", encoding="utf-8") as handle:
+                handle.write("placeholder")
+            with patch("controllers.filedialog.askopenfilename", return_value=master_path):
+                with patch("controller_modules.path_preflight.open", side_effect=PermissionError("locked")):
+                    controller.select_master_file()
+
+        self.assertEqual(controller.master_file_path, master_path)
+        self.assertEqual(frame.selected_master, master_path)
+        self.assertEqual(single.master_file, master_path)
+        self.assertEqual(multi.master_file, master_path)
+        self.assertTrue(dialogs.warnings)
+
+    def test_updater_select_target_folder_confirms_before_committing(self):
+        config = UpdaterConfig(0, 1, 2, 1, 2, 3, 1, False, True)
+        frame = FakeUpdaterFrame(config)
+        single = FakeSingleUpdaterProcessor()
+        multi = FakeMultiUpdaterProcessor()
+        dialogs = FakeDialogs(confirm_result=True)
+        controller = UpdaterController(frame, single, multi, dialog_service=dialogs)
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            target_folder = os.path.join(temp_dir, "targets")
+            os.makedirs(target_folder)
+            sample_path = os.path.join(target_folder, "a.xlsx")
+            with open(sample_path, "w", encoding="utf-8") as handle:
+                handle.write("placeholder")
+            single.listed_files = [sample_path]
+
+            with patch("controllers.filedialog.askdirectory", return_value=target_folder):
+                controller.select_target_folder()
+
+        self.assertEqual(controller.target_folder, target_folder)
+        self.assertEqual(frame.selected_folder, target_folder)
+        self.assertEqual(single.target_folder, target_folder)
+        self.assertEqual(multi.target_folder, target_folder)
+        self.assertTrue(dialogs.confirms)
+
+    def test_updater_select_target_folder_cancel_keeps_old_state(self):
+        config = UpdaterConfig(0, 1, 2, 1, 2, 3, 1, False, True)
+        frame = FakeUpdaterFrame(config)
+        single = FakeSingleUpdaterProcessor()
+        multi = FakeMultiUpdaterProcessor()
+        dialogs = FakeDialogs(confirm_result=False)
+        controller = UpdaterController(frame, single, multi, dialog_service=dialogs)
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            target_folder = os.path.join(temp_dir, "targets")
+            os.makedirs(target_folder)
+            sample_path = os.path.join(target_folder, "a.xlsx")
+            with open(sample_path, "w", encoding="utf-8") as handle:
+                handle.write("placeholder")
+            single.listed_files = [sample_path]
+
+            with patch("controllers.filedialog.askdirectory", return_value=target_folder):
+                controller.select_target_folder()
+
+        self.assertEqual(controller.target_folder, "")
+        self.assertEqual(frame.selected_folder, "")
+        self.assertIsNone(single.target_folder)
+        self.assertIsNone(multi.target_folder)
+
+    def test_updater_select_target_folder_readonly_sample_blocks_commit(self):
+        config = UpdaterConfig(0, 1, 2, 1, 2, 3, 1, False, True)
+        frame = FakeUpdaterFrame(config)
+        single = FakeSingleUpdaterProcessor()
+        multi = FakeMultiUpdaterProcessor()
+        dialogs = FakeDialogs(confirm_result=True)
+        controller = UpdaterController(frame, single, multi, dialog_service=dialogs)
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            target_folder = os.path.join(temp_dir, "targets")
+            os.makedirs(target_folder)
+            sample_path = os.path.join(target_folder, "a.xlsx")
+            with open(sample_path, "w", encoding="utf-8") as handle:
+                handle.write("placeholder")
+            single.listed_files = [sample_path]
+
+            with patch("controllers.filedialog.askdirectory", return_value=target_folder):
+                with patch("controller_modules.path_preflight.open", side_effect=PermissionError("locked")):
+                    controller.select_target_folder()
+
+        self.assertEqual(controller.target_folder, "")
+        self.assertEqual(frame.selected_folder, "")
+        self.assertIsNone(single.target_folder)
+        self.assertIsNone(multi.target_folder)
+        self.assertTrue(dialogs.warnings)
+        self.assertFalse(dialogs.confirms)
+
+    def test_reverse_select_target_folder_skips_writable_probe(self):
+        config = ReverseConfig(0, 1, 2, 1, 2, 3, False, allow_blank_write=True)
+        frame = FakeUpdaterFrame(config)
+        processor = FakeReverseProcessor()
+        dialogs = FakeDialogs(confirm_result=True)
+        controller = ReverseUpdaterController(frame, processor, dialog_service=dialogs)
+
+        with patch("controllers.filedialog.askdirectory", return_value="C:/tmp"):
+            with patch("controller_modules.path_preflight.open", side_effect=PermissionError("locked")):
+                controller.select_target_folder()
+
+        self.assertEqual(controller.target_folder, "C:/tmp")
+        self.assertEqual(frame.selected_folder, "C:/tmp")
+        self.assertEqual(processor.target_folder, "C:/tmp")
+        self.assertTrue(dialogs.confirms)
+
     def _build_batch_view_config(self):
         return BatchViewConfig(
             mode=MODE_MASTER_TO_TARGET_SINGLE,
@@ -823,21 +1279,51 @@ class ControllersTestCase(unittest.TestCase):
         )
 
     def test_batch_controller_precheck_and_run_summary(self):
-        config = self._build_batch_view_config()
-        frame = FakeBatchFrame(config)
-        dialogs = FakeDialogs()
-        runner = FakeBatchRunner()
-        controller = BatchController(
-            frame,
-            FakeNoopProcessor(),
-            FakeNoopProcessor(),
-            dialog_service=dialogs,
-            state_store=FakeStateStore(),
-            runner=runner,
-        )
+        with tempfile.TemporaryDirectory() as temp_dir:
+            master_path = os.path.join(temp_dir, "master.xlsx")
+            with open(master_path, "w", encoding="utf-8") as handle:
+                handle.write("placeholder")
+            folder_one = os.path.join(temp_dir, "p1")
+            folder_two = os.path.join(temp_dir, "p2")
+            os.makedirs(folder_one)
+            os.makedirs(folder_two)
+            file_one = os.path.join(folder_one, "a.xlsx")
+            file_two = os.path.join(folder_two, "b.xlsx")
+            with open(file_one, "w", encoding="utf-8") as handle:
+                handle.write("placeholder")
+            with open(file_two, "w", encoding="utf-8") as handle:
+                handle.write("placeholder")
 
-        controller.precheck_batch()
-        controller.process_files()
+            config = self._build_batch_view_config()
+            config = BatchViewConfig(
+                mode=config.mode,
+                master_file=master_path,
+                config_path=config.config_path,
+                defaults_single=config.defaults_single,
+                defaults_reverse=config.defaults_reverse,
+                jobs=(
+                    BatchJobRow(name="job-1", target_folder=folder_one, variable_column=4),
+                    BatchJobRow(name="job-2", target_folder=folder_two, variable_column=5),
+                ),
+                runtime=config.runtime,
+            )
+            frame = FakeBatchFrame(config)
+            dialogs = FakeDialogs()
+            runner = FakeBatchRunner()
+            single = FakeNoopProcessor()
+            single.listed_files_by_folder[folder_one] = [file_one]
+            single.listed_files_by_folder[folder_two] = [file_two]
+            controller = BatchController(
+                frame,
+                single,
+                FakeNoopProcessor(),
+                dialog_service=dialogs,
+                state_store=FakeStateStore(),
+                runner=runner,
+            )
+
+            controller.precheck_batch()
+            controller.process_files()
 
         self.assertEqual(len(runner.precheck_calls), 2)
         self.assertEqual(len(runner.run_calls), 1)
@@ -847,20 +1333,50 @@ class ControllersTestCase(unittest.TestCase):
         self.assertIn("Batch finished", dialogs.infos[-1][1])
 
     def test_batch_controller_precheck_fail_blocks_run(self):
-        config = self._build_batch_view_config()
-        frame = FakeBatchFrame(config)
-        dialogs = FakeDialogs()
-        runner = FakeBatchRunner(precheck_errors=["missing folder"])
-        controller = BatchController(
-            frame,
-            FakeNoopProcessor(),
-            FakeNoopProcessor(),
-            dialog_service=dialogs,
-            state_store=FakeStateStore(),
-            runner=runner,
-        )
+        with tempfile.TemporaryDirectory() as temp_dir:
+            master_path = os.path.join(temp_dir, "master.xlsx")
+            with open(master_path, "w", encoding="utf-8") as handle:
+                handle.write("placeholder")
+            folder_one = os.path.join(temp_dir, "p1")
+            folder_two = os.path.join(temp_dir, "p2")
+            os.makedirs(folder_one)
+            os.makedirs(folder_two)
+            file_one = os.path.join(folder_one, "a.xlsx")
+            file_two = os.path.join(folder_two, "b.xlsx")
+            with open(file_one, "w", encoding="utf-8") as handle:
+                handle.write("placeholder")
+            with open(file_two, "w", encoding="utf-8") as handle:
+                handle.write("placeholder")
 
-        controller.process_files()
+            config = self._build_batch_view_config()
+            config = BatchViewConfig(
+                mode=config.mode,
+                master_file=master_path,
+                config_path=config.config_path,
+                defaults_single=config.defaults_single,
+                defaults_reverse=config.defaults_reverse,
+                jobs=(
+                    BatchJobRow(name="job-1", target_folder=folder_one, variable_column=4),
+                    BatchJobRow(name="job-2", target_folder=folder_two, variable_column=5),
+                ),
+                runtime=config.runtime,
+            )
+            frame = FakeBatchFrame(config)
+            dialogs = FakeDialogs()
+            runner = FakeBatchRunner(precheck_errors=["missing folder"])
+            single = FakeNoopProcessor()
+            single.listed_files_by_folder[folder_one] = [file_one]
+            single.listed_files_by_folder[folder_two] = [file_two]
+            controller = BatchController(
+                frame,
+                single,
+                FakeNoopProcessor(),
+                dialog_service=dialogs,
+                state_store=FakeStateStore(),
+                runner=runner,
+            )
+
+            controller.process_files()
 
         self.assertEqual(len(runner.run_calls), 0)
         self.assertTrue(dialogs.errors)
@@ -894,13 +1410,147 @@ class ControllersTestCase(unittest.TestCase):
                 runner=runner,
             )
 
-            with patch("controller_modules.base.open", side_effect=PermissionError("locked")):
+            with patch("controller_modules.path_preflight.open", side_effect=PermissionError("locked")):
                 controller.precheck_batch()
                 controller.process_files()
 
         self.assertEqual(len(runner.precheck_calls), 0)
         self.assertEqual(len(runner.run_calls), 0)
         self.assertTrue(dialogs.warnings)
+
+    def test_batch_controller_select_job_folder_confirms_before_commit(self):
+        config = self._build_batch_view_config()
+        frame = FakeBatchFrame(config)
+        dialogs = FakeDialogs(confirm_result=True)
+        single = FakeNoopProcessor()
+        reverse = FakeNoopProcessor()
+        controller = BatchController(
+            frame,
+            single,
+            reverse,
+            dialog_service=dialogs,
+            state_store=FakeStateStore(),
+            runner=FakeBatchRunner(),
+        )
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            target_folder = os.path.join(temp_dir, "targets")
+            os.makedirs(target_folder)
+            sample_path = os.path.join(target_folder, "a.xlsx")
+            with open(sample_path, "w", encoding="utf-8") as handle:
+                handle.write("placeholder")
+            single.listed_files_by_folder[target_folder] = [sample_path]
+
+            with patch("controllers.filedialog.askdirectory", return_value=target_folder):
+                controller.select_job_folder(0)
+
+        self.assertEqual(frame.job_folder_updates, [(0, target_folder)])
+        self.assertTrue(dialogs.confirms)
+
+    def test_batch_controller_reuses_same_sample_seed_for_selection_and_precheck(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            master_path = os.path.join(temp_dir, "master.xlsx")
+            with open(master_path, "w", encoding="utf-8") as handle:
+                handle.write("placeholder")
+            target_folder = os.path.join(temp_dir, "targets")
+            os.makedirs(target_folder)
+            sample_path = os.path.join(target_folder, "a.xlsx")
+            with open(sample_path, "w", encoding="utf-8") as handle:
+                handle.write("placeholder")
+
+            view_config = self._build_batch_view_config()
+            view_config = BatchViewConfig(
+                mode=view_config.mode,
+                master_file=master_path,
+                config_path=view_config.config_path,
+                defaults_single=view_config.defaults_single,
+                defaults_reverse=view_config.defaults_reverse,
+                jobs=(BatchJobRow(name="job-1", target_folder=target_folder, variable_column=4),),
+                runtime=view_config.runtime,
+            )
+            frame = FakeBatchFrame(view_config)
+            dialogs = FakeDialogs(confirm_result=True)
+            runner = FakeBatchRunner()
+            single = FakeNoopProcessor()
+            single.listed_files_by_folder[target_folder] = [sample_path]
+            controller = BatchController(
+                frame,
+                single,
+                FakeNoopProcessor(),
+                dialog_service=dialogs,
+                state_store=FakeStateStore(),
+                runner=runner,
+            )
+            expected_seed = controller._build_batch_sample_seed(
+                MODE_MASTER_TO_TARGET_SINGLE,
+                0,
+                target_folder,
+            )
+            seen_seeds = []
+
+            def fake_probe(file_paths, *, require_writable_sample=False, sample_seed_key=""):
+                seen_seeds.append(sample_seed_key)
+                if sample_seed_key != expected_seed:
+                    return ExcelFolderProbeResult(
+                        file_paths=tuple(file_paths),
+                        sampled_file=sample_path,
+                        sample_writable=False,
+                        warning_message="unexpected sample selection",
+                    )
+                return ExcelFolderProbeResult(
+                    file_paths=tuple(file_paths),
+                    sampled_file=sample_path,
+                    sample_writable=True,
+                )
+
+            with patch("controllers.filedialog.askdirectory", return_value=target_folder):
+                with patch("controller_modules.base.probe_excel_folder", side_effect=fake_probe):
+                    with patch("controller_modules.batch.probe_excel_folder", side_effect=fake_probe):
+                        controller.select_job_folder(0)
+                        controller.precheck_batch()
+
+        self.assertEqual(seen_seeds, [expected_seed, expected_seed])
+        self.assertEqual(frame.job_folder_updates, [(0, target_folder)])
+        self.assertEqual(len(runner.precheck_calls), 1)
+        self.assertFalse(dialogs.errors)
+
+    def test_batch_controller_precheck_validates_loaded_job_folders(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            master_path = os.path.join(temp_dir, "master.xlsx")
+            with open(master_path, "w", encoding="utf-8") as handle:
+                handle.write("placeholder")
+            empty_folder = os.path.join(temp_dir, "empty")
+            os.makedirs(empty_folder)
+
+            view_config = self._build_batch_view_config()
+            view_config = BatchViewConfig(
+                mode=view_config.mode,
+                master_file=master_path,
+                config_path=view_config.config_path,
+                defaults_single=view_config.defaults_single,
+                defaults_reverse=view_config.defaults_reverse,
+                jobs=(BatchJobRow(name="job-1", target_folder=empty_folder, variable_column=4),),
+                runtime=view_config.runtime,
+            )
+            frame = FakeBatchFrame(view_config)
+            dialogs = FakeDialogs()
+            runner = FakeBatchRunner()
+            single = FakeNoopProcessor()
+            single.listed_files_by_folder[empty_folder] = []
+            controller = BatchController(
+                frame,
+                single,
+                FakeNoopProcessor(),
+                dialog_service=dialogs,
+                state_store=FakeStateStore(),
+                runner=runner,
+            )
+
+            controller.precheck_batch()
+
+        self.assertTrue(dialogs.errors)
+        self.assertIn("jobs[1] has no Excel files", dialogs.errors[0][1])
+
     def test_batch_controller_load_and_export_json(self):
         frame = FakeBatchFrame(self._build_batch_view_config())
         dialogs = FakeDialogs()

@@ -16,6 +16,7 @@ build/
 # Environment
 venv/
 .venv/
+.python/
 env/
 .env
 

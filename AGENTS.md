@@ -59,16 +59,16 @@ If behavior changes, update the owning doc in the same change set.
 ## Validation Defaults
 
 - `docs-only`
-  - `python scripts/check_text_encoding.py --root docs`
+  - `.\scripts\python.cmd scripts/check_text_encoding.py --root docs`
 - `UI / controller changes`
-  - `python -m unittest discover -s tests -p "test_ui_*.py"`
-  - `python -m unittest tests.test_ui_controllers tests.test_task_runner`
+  - `.\scripts\python.cmd -m unittest discover -s tests -p "test_ui_*.py"`
+  - `.\scripts\python.cmd -m unittest tests.test_ui_controllers tests.test_task_runner`
 - `IO semantics or processor behavior`
-  - `python scripts/run_regression_suite.py --with-golden`
+  - `.\scripts\python.cmd scripts/run_regression_suite.py --with-golden`
 - `Terminology changes`
-  - `python -m unittest tests.test_terminology_processor tests.test_terminology_extractors tests.test_ui_terminology_controller`
+  - `.\scripts\python.cmd -m unittest tests.test_terminology_processor tests.test_terminology_extractors tests.test_ui_terminology_controller`
 - `Update-master changes`
-  - `python -m unittest tests.test_master_merge_processor tests.test_master_merge_dispatcher tests.test_ui_update_master_views tests.test_ui_merge_masters_view`
+  - `.\scripts\python.cmd -m unittest tests.test_master_merge_processor tests.test_master_merge_dispatcher tests.test_ui_update_master_views tests.test_ui_merge_masters_view`
 
 See `docs/testing.md` for the fuller change-type matrix and environment caveats.
 

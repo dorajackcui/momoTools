@@ -157,4 +157,4 @@ Match-column behavior:
 ## Change Rule
 
 - update this document whenever Excel value normalization, blank handling, matching rules, or mode-specific write behavior changes
-- when changing these rules, run `python scripts/run_regression_suite.py --with-golden`
+- when changing these rules, run `.\scripts\python.cmd scripts/run_regression_suite.py --with-golden`

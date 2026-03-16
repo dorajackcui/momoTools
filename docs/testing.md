@@ -20,74 +20,83 @@ Primary test areas:
 
 Check environment gaps first if failures appear before test execution starts.
 
+All commands below use `.\scripts\python.cmd`, which prefers a repo-local Python and avoids depending on PATH access. In a normal unsandboxed shell, `python ...` remains equivalent if your environment is already configured.
+
 ## Standard Commands
 
 Run the app smoke-oriented subset:
 
-```bash
-python -m unittest tests.test_app_smoke tests.test_app_component_registry tests.test_app_log_console
+```powershell
+.\scripts\python.cmd -m unittest tests.test_app_smoke tests.test_app_component_registry tests.test_app_log_console
 ```
 
 Run UI-focused tests:
 
-```bash
-python -m unittest discover -s tests -p "test_ui_*.py"
+```powershell
+.\scripts\python.cmd -m unittest discover -s tests -p "test_ui_*.py"
 ```
 
 Run task-runner and controller wiring checks:
 
-```bash
-python -m unittest tests.test_ui_controllers tests.test_task_runner
+```powershell
+.\scripts\python.cmd -m unittest tests.test_ui_controllers tests.test_task_runner
+```
+
+Run folder-precheck and file-enumeration coverage for tool flows:
+
+```powershell
+.\scripts\python.cmd -m unittest tests.test_ui_controllers tests.test_com_processors tests.test_core_processors_regression
 ```
 
 Run the canonical regression suite:
 
-```bash
-python scripts/run_regression_suite.py --with-golden
+```powershell
+.\scripts\python.cmd scripts/run_regression_suite.py --with-golden
 ```
 
 Run golden regression directly:
 
-```bash
-python scripts/run_golden_regression.py --manifest tests/golden/manifest.sample.json
+```powershell
+.\scripts\python.cmd scripts/run_golden_regression.py --manifest tests/golden/manifest.sample.json
 ```
 
 Run the optional private-data regression:
 
-```bash
-python -m unittest tests.test_private_data_skip_blank_write -v
+```powershell
+.\scripts\python.cmd -m unittest tests.test_private_data_skip_blank_write -v
 ```
 
 Run the performance baseline report:
 
-```bash
-python scripts/run_perf_baseline.py
+```powershell
+.\scripts\python.cmd scripts/run_perf_baseline.py
 ```
 
 ## Quick Checks
 
 - Docs-only changes:
 
-```bash
-python scripts/check_text_encoding.py --root docs
+```powershell
+.\scripts\python.cmd scripts/check_text_encoding.py --root docs
 ```
 
 - COM dependency regression around import safety:
 
-```bash
-python -m unittest tests.test_app_smoke tests.test_com_processors
+```powershell
+.\scripts\python.cmd -m unittest tests.test_app_smoke tests.test_com_processors
 ```
 
 ## Change-Oriented Verification Matrix
 
 | Change type | Minimum verification |
 | --- | --- |
-| Docs-only | `python scripts/check_text_encoding.py --root docs` |
-| UI / controller changes | `python -m unittest discover -s tests -p "test_ui_*.py"` and `python -m unittest tests.test_ui_controllers tests.test_task_runner` |
-| IO semantics / processor behavior | `python scripts/run_regression_suite.py --with-golden` |
-| Terminology changes | `python -m unittest tests.test_terminology_processor tests.test_terminology_extractors tests.test_ui_terminology_controller` |
-| Update-master changes | `python -m unittest tests.test_master_merge_processor tests.test_master_merge_dispatcher tests.test_ui_update_master_views tests.test_ui_merge_masters_view` |
-| Packaging / release work | `python scripts/run_regression_suite.py --with-golden` plus a Windows packaging check from `TM_builder.spec` |
+| Docs-only | `.\scripts\python.cmd scripts/check_text_encoding.py --root docs` |
+| UI / controller changes | `.\scripts\python.cmd -m unittest discover -s tests -p "test_ui_*.py"` and `.\scripts\python.cmd -m unittest tests.test_ui_controllers tests.test_task_runner` |
+| Folder precheck / processor file-list changes | `.\scripts\python.cmd -m unittest tests.test_ui_controllers tests.test_com_processors tests.test_core_processors_regression` |
+| IO semantics / processor behavior | `.\scripts\python.cmd scripts/run_regression_suite.py --with-golden` |
+| Terminology changes | `.\scripts\python.cmd -m unittest tests.test_terminology_processor tests.test_terminology_extractors tests.test_ui_terminology_controller` |
+| Update-master changes | `.\scripts\python.cmd -m unittest tests.test_master_merge_processor tests.test_master_merge_dispatcher tests.test_ui_update_master_views tests.test_ui_merge_masters_view` |
+| Packaging / release work | `.\scripts\python.cmd scripts/run_regression_suite.py --with-golden` plus a Windows packaging check from `TM_builder.spec` |
 
 If workbook IO behavior changes, include regression coverage and run the golden suite.
 

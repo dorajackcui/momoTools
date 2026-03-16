@@ -20,9 +20,13 @@ REQUIRE_OUTPUT_FILE = "Please select output file first."
 REQUIRE_TERMINOLOGY_INPUT = "Please select input folder, rule config, and output file."
 TASK_ALREADY_RUNNING = "A task is already running. Please wait."
 MASTER_FILE_LOCKED_WARNING = (
-    "Master file is open or locked.\n"
-    "Please close it in Excel, then retry."
+    "Master file may still be open in Excel,\n"
+    "or locked by another program,\n"
+    "or you do not have write permission.\n"
+    "Please close the file and retry."
 )
+MASTER_FILE_NOT_FOUND = "Master file not found."
+EXCEL_FOLDER_EMPTY = "No Excel files found in the selected folder."
 VIEW_LOGS_BUTTON = "View Logs"
 LOG_WINDOW_TITLE = "Execution Logs"
 

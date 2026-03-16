@@ -55,6 +55,9 @@ class ReverseExcelProcessor:
     def set_target_folder(self, folder_path):
         self.target_folder = folder_path
 
+    def list_target_files(self, folder_path=None):
+        return self._list_target_files_internal(folder_path=folder_path)
+
     def set_fill_blank_only(self, enabled: bool):
         self.fill_blank_only = bool(enabled)
 
@@ -96,10 +99,7 @@ class ReverseExcelProcessor:
         return updated_count
 
     def _read_target_files(self):
-        file_paths = sorted(
-            iter_excel_files(self.target_folder, extensions=self.io_contract.extensions),
-            key=lambda path: path.lower(),
-        )
+        file_paths = self.list_target_files()
         self.stats.files_total = len(file_paths)
         self.log(f"找到 {len(file_paths)} 个目标文件")
 
@@ -168,6 +168,13 @@ class ReverseExcelProcessor:
 
         self.stats.files_succeeded += 1
         return local_dict
+
+    def _list_target_files_internal(self, folder_path=None):
+        folder = self.target_folder if folder_path is None else folder_path
+        return sorted(
+            iter_excel_files(folder, extensions=self.io_contract.extensions),
+            key=lambda path: path.lower(),
+        )
 
     def _update_master_file(self, target_data_dict):
         if not target_data_dict:

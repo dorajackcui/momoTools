@@ -36,6 +36,20 @@ class ComProcessorsTestCase(unittest.TestCase):
         self.assertEqual(len(processor.stats.errors), 1)
 
     @patch("core.excel_compatibility_processor.iter_excel_files")
+    def test_compatibility_processor_list_target_files_matches_process_enumeration(
+        self,
+        mock_iter_excel_files,
+    ):
+        mock_iter_excel_files.return_value = ["C:\\tmp\\b.xlsx", "C:\\tmp\\a.xlsx"]
+        processor = ExcelCompatibilityProcessor()
+        processor.set_folder_path("C:\\tmp")
+
+        self.assertEqual(
+            processor.list_target_files(),
+            ["C:\\tmp\\b.xlsx", "C:\\tmp\\a.xlsx"],
+        )
+
+    @patch("core.excel_compatibility_processor.iter_excel_files")
     @patch("core.excel_compatibility_processor._load_dispatch")
     def test_compatibility_processor_set_log_callback_routes_logs(
         self,
@@ -128,6 +142,20 @@ class ComProcessorsTestCase(unittest.TestCase):
         self.assertTrue(logs)
         self.assertTrue(any("Processing:" in msg for msg in logs))
         excel_app.Quit.assert_called_once()
+
+    @patch("core.excel_cleaner.iter_excel_files")
+    def test_column_clearer_list_target_files_matches_internal_listing(
+        self,
+        mock_iter_excel_files,
+    ):
+        mock_iter_excel_files.return_value = ["C:\\tmp\\a.xlsx"]
+        clearer = ExcelColumnClearer()
+        clearer.set_folder_path("C:\\tmp")
+
+        self.assertEqual(
+            clearer.list_target_files(),
+            clearer._list_target_files(),
+        )
 
     @patch("core.excel_cleaner.iter_excel_files", return_value=[])
     @patch("core.excel_cleaner._load_win32com_client", side_effect=RuntimeError(CLEANER_COM_ERROR))

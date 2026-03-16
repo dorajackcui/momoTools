@@ -16,13 +16,22 @@ class UpdaterController(BaseController):
             return
         self.master_file_path = file_path
         self._require_frame().set_master_file_label(file_path)
-        self._ensure_master_file_ready(file_path)
+        self._notify_master_file_probe(file_path)
         self.single_processor.set_master_file(file_path)
         self.multi_processor.set_master_file(file_path)
 
     def select_target_folder(self):
         folder_path = self._ask_folder("选择目标文件夹")
         if not folder_path:
+            return
+        probe_result = self._confirm_excel_folder_selection(
+            folder_path=folder_path,
+            list_files=self.single_processor.list_target_files,
+            dialog_title="Confirm target files",
+            require_writable_sample=True,
+            sample_seed_key=f"updater|{folder_path}",
+        )
+        if probe_result is None:
             return
         self.target_folder = folder_path
         self._require_frame().set_target_folder_label(folder_path)

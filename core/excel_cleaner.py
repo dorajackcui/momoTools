@@ -33,6 +33,10 @@ class ExcelColumnClearer:
     def set_folder_path(self, path):
         self.folder_path = path
 
+    def list_target_files(self, folder_path=None):
+        folder = self.folder_path if folder_path is None else folder_path
+        return self._list_target_files(folder_path=folder)
+
     def set_column_number(self, number):
         self.column_number = number
 
@@ -58,9 +62,10 @@ class ExcelColumnClearer:
         event = ErrorEvent(code=code, message=message, file_path=file_path, exception=exc)
         self.event_logger.error(self.stats, event)
 
-    def _list_target_files(self):
+    def _list_target_files(self, folder_path=None):
+        folder = self.folder_path if folder_path is None else folder_path
         return iter_excel_files(
-            self.folder_path,
+            folder,
             extensions=self.io_contract.extensions,
             case_sensitive=True,
         )

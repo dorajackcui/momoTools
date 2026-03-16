@@ -23,6 +23,15 @@ class DeepReplaceProcessor:
     def set_target_folder(self, folder_path):
         self.target_folder = folder_path
 
+    def list_target_files(self, folder_path=None):
+        folder = self.target_folder if folder_path is None else folder_path
+        return iter_excel_files(
+            folder,
+            extensions=self.io_contract.extensions,
+            include_temp_files=False,
+            case_sensitive=True,
+        )
+
     def log(self, message):
         self.log_callback(message)
 

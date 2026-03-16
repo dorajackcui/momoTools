@@ -53,6 +53,10 @@ Not allowed:
 - Completion callbacks marshal back to the UI with `root.after(...)`.
 - The app enforces a single-task lock; concurrent processing requests are rejected.
 - Cancellation is not currently implemented.
+- File and folder selection prechecks belong to the `controller_modules` + `ui` dialog layer.
+- Shared folder prechecks currently cover content-sync flows, batch job folders, and target-folder writes for `Column Clear/Insert/Delete`, `Compatibility`, and `Deep Replace`.
+- `Deep Replace` source-folder selection remains a plain path selection and does not use target-folder write prechecks.
+- Core processors still own workbook business behavior; input prechecks must not redefine IO semantics.
 
 ## Tool Groups
 

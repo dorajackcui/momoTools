@@ -9,8 +9,17 @@ class ClearerController(BaseController):
         self.target_folder = ""
 
     def select_clearer_folder(self):
-        folder_path = self._ask_folder("选择目标文件夹")
+        folder_path = self._ask_folder("Select target folder")
         if not folder_path:
+            return
+        probe_result = self._confirm_excel_folder_selection(
+            folder_path=folder_path,
+            list_files=self.clearer.list_target_files,
+            dialog_title="Confirm target files",
+            require_writable_sample=True,
+            sample_seed_key=f"clearer|{folder_path}",
+        )
+        if probe_result is None:
             return
         self.target_folder = folder_path
         self._require_frame().set_target_folder_label(folder_path)
@@ -41,18 +50,21 @@ class ClearerController(BaseController):
     def clear_column(self):
         self._with_column_config(
             action=self.clearer.clear_column_in_files,
-            success_template="共处理 {processed_files} 个文件。",
+            success_template="Processed {processed_files} file(s).",
         )
 
     def insert_column(self):
         self._with_column_config(
             action=self.clearer.insert_column_in_files,
-            success_template="共处理 {processed_files} 个文件。",
+            success_template="Processed {processed_files} file(s).",
         )
 
     def delete_column(self):
         self._with_column_config(
             action=self.clearer.delete_column_in_files,
-            success_template="共处理 {processed_files} 个文件。",
-            confirm_message="确定要删除所有Excel文件的第{column_number}列吗？\n此操作不可撤销！",
+            success_template="Processed {processed_files} file(s).",
+            confirm_message=(
+                "Delete column {column_number} in all Excel files?\n"
+                "This action cannot be undone."
+            ),
         )

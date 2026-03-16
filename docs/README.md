@@ -48,7 +48,7 @@ Avoid restating the same rule in multiple active docs. Link back to the owning d
 
 - Changing workbook IO semantics:
   - Update `docs/io-contract.md`
-  - Run `python scripts/run_regression_suite.py --with-golden`
+  - Run `.\scripts\python.cmd scripts/run_regression_suite.py --with-golden`
 - Changing app structure, layer boundaries, or task-runner behavior:
   - Update `docs/architecture.md`
 - Changing environment assumptions, setup steps, or what works without COM:

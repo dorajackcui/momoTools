@@ -76,6 +76,9 @@ class MultiColumnExcelProcessor:
     def set_target_folder(self, folder_path):
         self.target_folder = folder_path
 
+    def list_target_files(self, folder_path=None):
+        return self._list_target_files_internal(folder_path=folder_path)
+
     def set_post_process_enabled(self, enabled: bool):
         self.post_process_enabled = bool(enabled)
 
@@ -213,7 +216,7 @@ class MultiColumnExcelProcessor:
         master_dict = self._build_master_dict(master_df, usecols)
         self.log(f"Master 中共找到 {len(master_dict)} 个有效Key")
 
-        file_paths = iter_excel_files(self.target_folder, extensions=self.io_contract.extensions)
+        file_paths = self.list_target_files()
         self.stats.files_total = len(file_paths)
         self.log(f"找到 {len(file_paths)} 个目标文件")
 
@@ -335,6 +338,10 @@ class MultiColumnExcelProcessor:
         self.stats.files_succeeded += 1
         self.stats.cells_updated += updated
         return updated
+
+    def _list_target_files_internal(self, folder_path=None):
+        folder = self.target_folder if folder_path is None else folder_path
+        return iter_excel_files(folder, extensions=self.io_contract.extensions)
 
     def _post_process(self, file_paths):
         if not file_paths:

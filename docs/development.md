@@ -13,25 +13,40 @@ Notes:
 - The canonical developer environment is `pip install -r requirements.txt`.
 - Missing `pywin32` no longer blocks importing the app module, but COM-backed tools still require it at runtime.
 - Missing `pandas` or other required packages can still block processor imports and broader test suites.
+- Sandboxed or path-restricted shells should not rely on a host `python.exe`; use the repo-local launcher in `scripts/python.cmd`.
 
 ## Setup
 
-```bash
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
+Standard local setup:
+
+```powershell
+python -m venv .venv
+.\scripts\python.cmd -m pip install -r requirements.txt
 ```
+
+Sandbox-safe setup for path-restricted shells:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\bootstrap_repo_python.ps1 -BasePython "C:\Path\To\python.exe"
+.\scripts\python.cmd -m pip install -r requirements.txt
+```
+
+Notes:
+
+- `.\scripts\python.cmd` is the canonical Python entrypoint for this repo because it keeps working when PATH-based interpreters are blocked by sandbox rules.
+- The bootstrap script is only needed when a shell cannot execute the base interpreter behind `.venv`. It copies the selected base Python into `.python/` inside the repo and recreates `.venv/` from that local copy.
+- In a normal unsandboxed local shell you can still use `python ...` directly, but docs and automation should prefer `.\scripts\python.cmd ...`.
 
 Optional local safety setup for restricted fixtures:
 
-```bash
+```powershell
 git config core.hooksPath .githooks
 ```
 
 ## Running The App
 
-```bash
-python app.py
+```powershell
+.\scripts\python.cmd app.py
 ```
 
 Behavior by environment:
@@ -52,32 +67,32 @@ Behavior by environment:
 
 - Docs-only changes:
 
-```bash
-python scripts/check_text_encoding.py --root docs
+```powershell
+.\scripts\python.cmd scripts/check_text_encoding.py --root docs
 ```
 
 - App import and smoke-adjacent changes:
 
-```bash
-python -m unittest tests.test_app_smoke tests.test_app_component_registry tests.test_app_log_console
+```powershell
+.\scripts\python.cmd -m unittest tests.test_app_smoke tests.test_app_component_registry tests.test_app_log_console
 ```
 
 - Full canonical regression:
 
-```bash
-python scripts/run_regression_suite.py --with-golden
+```powershell
+.\scripts\python.cmd scripts/run_regression_suite.py --with-golden
 ```
 
 ## Change-Type Verification Matrix
 
 | Change type | Minimum verification |
 | --- | --- |
-| Docs-only | `python scripts/check_text_encoding.py --root docs` |
-| UI / controller wiring | `python -m unittest discover -s tests -p "test_ui_*.py"` and `python -m unittest tests.test_ui_controllers tests.test_task_runner` |
-| IO semantics / processor behavior | `python scripts/run_regression_suite.py --with-golden` |
-| Terminology pipeline | `python -m unittest tests.test_terminology_processor tests.test_terminology_extractors tests.test_ui_terminology_controller` |
-| Update-master behavior | `python -m unittest tests.test_master_merge_processor tests.test_master_merge_dispatcher tests.test_ui_update_master_views tests.test_ui_merge_masters_view` |
-| Packaging / release work | `python scripts/run_regression_suite.py --with-golden` and validate from `TM_builder.spec` on Windows |
+| Docs-only | `.\scripts\python.cmd scripts/check_text_encoding.py --root docs` |
+| UI / controller wiring | `.\scripts\python.cmd -m unittest discover -s tests -p "test_ui_*.py"` and `.\scripts\python.cmd -m unittest tests.test_ui_controllers tests.test_task_runner` |
+| IO semantics / processor behavior | `.\scripts\python.cmd scripts/run_regression_suite.py --with-golden` |
+| Terminology pipeline | `.\scripts\python.cmd -m unittest tests.test_terminology_processor tests.test_terminology_extractors tests.test_ui_terminology_controller` |
+| Update-master behavior | `.\scripts\python.cmd -m unittest tests.test_master_merge_processor tests.test_master_merge_dispatcher tests.test_ui_update_master_views tests.test_ui_merge_masters_view` |
+| Packaging / release work | `.\scripts\python.cmd scripts/run_regression_suite.py --with-golden` and validate from `TM_builder.spec` on Windows |
 
 ## Related Docs
 

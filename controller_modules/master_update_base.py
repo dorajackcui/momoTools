@@ -30,7 +30,7 @@ class BaseMasterUpdateController(BaseController):
 
         self.master_file_path = file_path
         self._require_frame().set_master_file_label(file_path)
-        self._ensure_master_file_ready(file_path)
+        self._notify_master_file_probe(file_path)
         self.processor.set_master_file(file_path)
         if self.update_folder:
             self.refresh_update_files()
@@ -38,6 +38,14 @@ class BaseMasterUpdateController(BaseController):
     def select_update_folder(self):
         folder_path = self._ask_folder("Select update folder")
         if not folder_path:
+            return
+        probe_result = self._confirm_excel_folder_selection(
+            folder_path=folder_path,
+            list_files=self.processor.list_update_files,
+            dialog_title="Confirm update files",
+            allow_empty_folder=True,
+        )
+        if probe_result is None:
             return
 
         self.update_folder = folder_path

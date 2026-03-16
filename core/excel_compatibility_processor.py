@@ -29,6 +29,14 @@ class ExcelCompatibilityProcessor:
     def set_folder_path(self, folder_path):
         self.folder_path = folder_path
 
+    def list_target_files(self, folder_path=None):
+        folder = self.folder_path if folder_path is None else folder_path
+        return iter_excel_files(
+            folder,
+            extensions=self.io_contract.extensions,
+            case_sensitive=True,
+        )
+
     def set_log_callback(self, callback):
         self.log_callback = callback or print
         self.event_logger = EventLogger(self.log_callback, self.io_contract.mode_name)
@@ -37,13 +45,7 @@ class ExcelCompatibilityProcessor:
         self.log_callback(message)
 
     def count_excel_files(self):
-        return len(
-            iter_excel_files(
-                self.folder_path,
-                extensions=self.io_contract.extensions,
-                case_sensitive=True,
-            )
-        )
+        return len(self.list_target_files())
 
     def _log_error(self, code, message, file_path="", exc=None):
         event = ErrorEvent(code=code, message=message, file_path=file_path, exception=exc)
@@ -53,11 +55,7 @@ class ExcelCompatibilityProcessor:
         if not self.folder_path:
             raise ValueError("Please set a valid folder path first")
 
-        file_paths = iter_excel_files(
-            self.folder_path,
-            extensions=self.io_contract.extensions,
-            case_sensitive=True,
-        )
+        file_paths = self.list_target_files()
         total_files = len(file_paths)
         processed_files = 0
         excel_app = None

@@ -25,15 +25,15 @@ The current repository documents packaging configuration but does not include a 
 
 Before packaging or sharing a build:
 
-```bash
-python scripts/run_regression_suite.py --with-golden
+```powershell
+.\scripts\python.cmd scripts/run_regression_suite.py --with-golden
 ```
 
 Optional diagnostics:
 
-```bash
-python scripts/run_perf_baseline.py
-python -m unittest tests.test_private_data_skip_blank_write -v
+```powershell
+.\scripts\python.cmd scripts/run_perf_baseline.py
+.\scripts\python.cmd -m unittest tests.test_private_data_skip_blank_write -v
 ```
 
 ## Operational Constraints

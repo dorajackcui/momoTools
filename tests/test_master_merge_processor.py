@@ -109,6 +109,25 @@ class MasterMergeProcessorTestCase(unittest.TestCase):
         self.assertEqual(read_row(master_path, 2, 4), ["K1", "M1", None, "MASTER_KEEP"])
         self.assertEqual(read_row(master_path, 3, 4), ["K2", "M2", "NEW_HIGH", "HIGH_V2"])
 
+    def test_list_update_files_matches_internal_sorted_sources(self):
+        master_path = self.root / "master.xlsx"
+        updates_dir = self.root / "updates"
+        updates_dir.mkdir()
+        write_workbook(master_path, [["key", "match", "v1"]])
+        c_path = updates_dir / "c.xlsx"
+        a_path = updates_dir / "a.xlsx"
+        write_workbook(c_path, [["key", "match", "v1"]])
+        write_workbook(a_path, [["key", "match", "v1"]])
+
+        processor = MasterMergeProcessor(log_callback=lambda _msg: None)
+        processor.set_master_file(str(master_path))
+        processor.set_update_folder(str(updates_dir))
+
+        self.assertEqual(
+            processor.list_update_files(),
+            [str(a_path), str(c_path)],
+        )
+
     def test_update_master_mode_overwrites_non_blank_and_keeps_last_processed(self):
         master_path = self.root / "master.xlsx"
         updates_dir = self.root / "updates"

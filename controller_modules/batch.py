@@ -17,6 +17,7 @@ from core.batch_config import (
     BatchDefaultsSingle,
     BatchJobConfig,
     BatchRuntimeOptions,
+    MODE_MASTER_TO_TARGET_SINGLE,
     dump_config,
     load_config,
     template_config,
@@ -25,6 +26,7 @@ from core.batch_runner import BatchRunner, BatchRunSummary
 from ui import strings
 from ui.validators import ValidationError
 from .base import BaseController
+from .path_preflight import probe_excel_folder
 from .path_state import TerminologyPathStateStore
 
 
@@ -150,7 +152,7 @@ class BatchController(BaseController):
             return
         self.master_file_path = file_path
         self._require_frame().set_master_file_label(file_path)
-        self._ensure_master_file_ready(file_path)
+        self._notify_master_file_probe(file_path)
 
     def select_config_file(self):
         initial_dir = ""
@@ -254,7 +256,56 @@ class BatchController(BaseController):
         folder_path = self._ask_folder("Select target folder")
         if not folder_path:
             return
+        mode = self._require_frame().get_mode()
+        probe_result = self._confirm_excel_folder_selection(
+            folder_path=folder_path,
+            list_files=self._resolve_batch_list_files(mode),
+            dialog_title="Confirm batch target files",
+            require_writable_sample=self._batch_mode_requires_writable_sample(mode),
+            sample_seed_key=self._build_batch_sample_seed(mode, index, folder_path),
+        )
+        if probe_result is None:
+            return
         self._require_frame().set_job_target_folder(index, folder_path)
+
+    @staticmethod
+    def _batch_mode_requires_writable_sample(mode: str) -> bool:
+        return mode == MODE_MASTER_TO_TARGET_SINGLE
+
+    def _resolve_batch_list_files(self, mode: str):
+        if self._batch_mode_requires_writable_sample(mode):
+            return self.single_processor.list_target_files
+        return self.reverse_processor.list_target_files
+
+    @staticmethod
+    def _build_batch_sample_seed(mode: str, index: int, folder_path: str) -> str:
+        return f"batch|{mode}|{index}|{folder_path}"
+
+    def _precheck_batch_target_folders(self, config: BatchConfigV1) -> list[str]:
+        errors: list[str] = []
+        list_files = self._resolve_batch_list_files(config.mode)
+        require_writable_sample = self._batch_mode_requires_writable_sample(config.mode)
+        for index, job in enumerate(config.jobs, start=1):
+            probe_result = probe_excel_folder(
+                list_files(job.target_folder),
+                require_writable_sample=require_writable_sample,
+                sample_seed_key=self._build_batch_sample_seed(
+                    config.mode,
+                    index - 1,
+                    job.target_folder,
+                ),
+            )
+            if not probe_result.file_paths:
+                errors.append(
+                    f"jobs[{index}] has no Excel files in target folder: {job.target_folder}"
+                )
+                continue
+            if require_writable_sample and probe_result.sample_writable is False:
+                errors.append(
+                    probe_result.warning_message
+                    or f"jobs[{index}] sampled file is not writable: {probe_result.sampled_file}"
+                )
+        return errors
 
     def auto_fill_jobs_by_keywords(self):
         # Backward compatibility wrapper for previously wired command hooks.
@@ -352,7 +403,8 @@ class BatchController(BaseController):
         config = self._build_core_config(view_config)
         if not self._ensure_master_file_ready(config.master_file):
             return
-        errors = self.runner.precheck(config)
+        errors = self._precheck_batch_target_folders(config)
+        errors.extend(self.runner.precheck(config))
         if errors:
             self.dialogs.error(strings.ERROR_TITLE, "Batch precheck failed:\n" + "\n".join(errors))
             return
@@ -368,7 +420,8 @@ class BatchController(BaseController):
         config = self._build_core_config(view_config)
         if not self._ensure_master_file_ready(config.master_file):
             return
-        errors = self.runner.precheck(config)
+        errors = self._precheck_batch_target_folders(config)
+        errors.extend(self.runner.precheck(config))
         if errors:
             self.dialogs.error(strings.ERROR_TITLE, "Batch precheck failed:\n" + "\n".join(errors))
             return

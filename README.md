@@ -4,17 +4,25 @@ Desktop Excel tooling for localization workflows. The app centers on `key + matc
 
 ## Install
 
-The canonical developer setup is:
+Standard local setup:
 
-```bash
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
+```powershell
+python -m venv .venv
+.\scripts\python.cmd -m pip install -r requirements.txt
 ```
+
+Sandbox-safe setup for path-restricted shells such as Codex:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\bootstrap_repo_python.ps1 -BasePython "C:\Path\To\python.exe"
+.\scripts\python.cmd -m pip install -r requirements.txt
+```
+
+`.\scripts\python.cmd` is the repo-safe Python entrypoint. It prefers a repo-local `.venv`, then falls back to an optional repo-local `.python` copy, so sandboxed or path-restricted shells do not depend on PATH.
 
 Optional local safety setup for restricted fixtures:
 
-```bash
+```powershell
 git config core.hooksPath .githooks
 ```
 
@@ -22,14 +30,14 @@ git config core.hooksPath .githooks
 
 Launch the desktop app:
 
-```bash
-python app.py
+```powershell
+.\scripts\python.cmd app.py
 ```
 
 Run the canonical regression entrypoint:
 
-```bash
-python scripts/run_regression_suite.py --with-golden
+```powershell
+.\scripts\python.cmd scripts/run_regression_suite.py --with-golden
 ```
 
 ## Risk Notes

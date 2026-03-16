@@ -74,6 +74,39 @@ class CoreProcessorsRegressionTestCase(unittest.TestCase):
         self.assertEqual(read_cell(target_path, 2, 3), "V1")
         self.assertEqual(read_cell(target_path, 3, 3), "keep-me")
 
+    def test_single_processor_list_target_files_matches_processing_candidates(self):
+        target_folder = self.root / "targets_list_single"
+        target_folder.mkdir()
+        first_path = target_folder / "a.xlsx"
+        second_path = target_folder / "nested" / "b.xlsx"
+        second_path.parent.mkdir()
+        write_workbook(first_path, [["key", "match", "translation"]])
+        write_workbook(second_path, [["key", "match", "translation"]])
+
+        processor = ExcelProcessor(log_callback=lambda _msg: None)
+        processor.set_target_folder(str(target_folder))
+
+        self.assertEqual(
+            processor.list_target_files(),
+            processor._list_target_files_internal(),
+        )
+
+    def test_reverse_processor_list_target_files_matches_processing_order(self):
+        target_folder = self.root / "targets_list_reverse"
+        target_folder.mkdir()
+        b_path = target_folder / "b.xlsx"
+        a_path = target_folder / "a.xlsx"
+        write_workbook(b_path, [["key", "match", "translation"]])
+        write_workbook(a_path, [["key", "match", "translation"]])
+
+        processor = ReverseExcelProcessor(log_callback=lambda _msg: None)
+        processor.set_target_folder(str(target_folder))
+
+        self.assertEqual(
+            processor.list_target_files(),
+            [str(a_path), str(b_path)],
+        )
+
     def test_multi_column_update(self):
         master_path = self.root / "master_multi.xlsx"
         target_folder = self.root / "targets_multi"
@@ -596,6 +629,24 @@ class CoreProcessorsRegressionTestCase(unittest.TestCase):
         self.assertEqual(target_file.read_text(encoding="utf-8"), "old-content")
         self.assertFalse(Path(f"{target_file}.bak").exists())
         self.assertEqual(len(processor.stats.errors), 1)
+
+    def test_deep_replace_list_target_files_lists_target_excel_candidates(self):
+        target_folder = self.root / "replace_target_listing"
+        nested_folder = target_folder / "nested"
+        target_folder.mkdir()
+        nested_folder.mkdir()
+        first_path = target_folder / "sample.xlsx"
+        second_path = nested_folder / "nested.xlsx"
+        first_path.write_text("placeholder", encoding="utf-8")
+        second_path.write_text("placeholder", encoding="utf-8")
+
+        processor = DeepReplaceProcessor(log_callback=lambda _msg: None)
+        processor.set_target_folder(str(target_folder))
+
+        self.assertEqual(
+            sorted(processor.list_target_files()),
+            sorted([str(first_path), str(second_path)]),
+        )
 
     def test_parallel_map_preserves_input_order(self):
         items = [1, 2, 3]

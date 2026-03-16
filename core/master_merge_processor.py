@@ -92,11 +92,11 @@ class MasterMergeProcessor:
     def set_row_key_policy(self, row_key_policy: str):
         self.row_key_policy = validate_row_key_policy(row_key_policy)
 
-    def list_update_files(self) -> list[str]:
-        return self._list_update_files_internal()
+    def list_update_files(self, folder_path: str | None = None) -> list[str]:
+        return self._list_update_files_internal(folder_path=folder_path)
 
-    def _list_update_files_internal(self) -> list[str]:
-        folder = str(self.update_folder or "").strip()
+    def _list_update_files_internal(self, folder_path: str | None = None) -> list[str]:
+        folder = str(self.update_folder if folder_path is None else folder_path or "").strip()
         if not folder or not os.path.isdir(folder):
             return []
 
