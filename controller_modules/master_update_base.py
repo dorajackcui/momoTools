@@ -98,17 +98,21 @@ class BaseMasterUpdateController(BaseController):
             return self.processor.process_files()
 
         def on_success(result):
+            summary_lines = [
+                f"{self.summary_title} {result.source_files} update file(s).",
+                f"Updated cells: {result.updated_cells}",
+                f"Added rows: {result.added_rows}",
+                f"Merged keys: {result.merged_keys}",
+                f"Overwritten cells: {result.overwritten_cells}",
+                f"Filled blank cells: {result.filled_blank_cells}",
+                f"Skipped new keys: {result.skipped_new_keys}",
+            ]
+            if getattr(result, "unmatched_report_path", ""):
+                summary_lines.append(f"Unmatched entries: {result.unmatched_entries}")
+                summary_lines.append(f"Unmatched report: {result.unmatched_report_path}")
             self.dialogs.info(
                 strings.SUCCESS_TITLE,
-                (
-                    f"{self.summary_title} {result.source_files} update file(s).\n"
-                    f"Updated cells: {result.updated_cells}\n"
-                    f"Added rows: {result.added_rows}\n"
-                    f"Merged keys: {result.merged_keys}\n"
-                    f"Overwritten cells: {result.overwritten_cells}\n"
-                    f"Filled blank cells: {result.filled_blank_cells}\n"
-                    f"Skipped new keys: {result.skipped_new_keys}"
-                ),
+                "\n".join(summary_lines),
             )
 
         self._run_action_or_notify(

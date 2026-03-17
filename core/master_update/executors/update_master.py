@@ -15,6 +15,12 @@ from core.master_update.source_collectors import (
     collect_source_candidates,
     collect_source_rows_dense,
 )
+from core.master_update.reporting import (
+    UnmatchedIdentityInfo,
+    build_unmatched_report_path,
+    build_unmatched_report_rows,
+    export_unmatched_report,
+)
 
 
 class UpdateMasterExecutor(BaseMasterUpdateExecutor):
@@ -51,6 +57,7 @@ class UpdateMasterExecutor(BaseMasterUpdateExecutor):
         collect_start = perf_counter()
         candidate_rows: dict[str, list[Any]]
         touched_cols_by_key: dict[str, set[int]] | None
+        unmatched_info_by_identity: dict[str, UnmatchedIdentityInfo] = {}
         if collector_mode == "dense":
             source_rows = collect_source_rows_dense(
                 source_files=source_files,
@@ -82,6 +89,7 @@ class UpdateMasterExecutor(BaseMasterUpdateExecutor):
             )
             candidate_rows = source_candidates.rows
             touched_cols_by_key = source_candidates.touched_cols_by_key
+            unmatched_info_by_identity = source_candidates.unmatched_info_by_key
         else:
             raise ValueError(f"Unsupported collector_mode: {collector_mode}")
 
@@ -186,6 +194,8 @@ class UpdateMasterExecutor(BaseMasterUpdateExecutor):
         scan_master_elapsed = perf_counter() - scan_master_start
 
         new_rows_to_append: list[list[object | None]] = []
+        unmatched_entries = 0
+        unmatched_report_path = ""
         if self.processor.key_admission_policy == KEY_ADMISSION_POLICY_ALLOW_NEW:
             for identity_key, merged_values in candidate_rows.items():
                 if identity_key in master_keys:
@@ -198,7 +208,33 @@ class UpdateMasterExecutor(BaseMasterUpdateExecutor):
                 master_keys.add(identity_key)
             added_rows = len(new_rows_to_append)
         if self.processor.key_admission_policy == KEY_ADMISSION_POLICY_EXISTING_ONLY:
-            skipped_new_keys = len(candidate_key_set - master_keys)
+            unmatched_identity_keys = candidate_key_set - master_keys
+            skipped_new_keys = len(unmatched_identity_keys)
+            unmatched_entries = skipped_new_keys
+            unmatched_report_rows = build_unmatched_report_rows(
+                {
+                    identity_key: unmatched_info_by_identity[identity_key]
+                    for identity_key in unmatched_identity_keys
+                    if identity_key in unmatched_info_by_identity
+                }
+            )
+            unmatched_report_path = build_unmatched_report_path(self.processor.update_folder)
+            try:
+                export_unmatched_report(
+                    unmatched_report_path,
+                    unmatched_report_rows,
+                    content_col_indexes=content_col_indexes,
+                )
+                self.processor.log(f"Translation unmatched report written: {unmatched_report_path}")
+            except Exception as exc:
+                self.processor.stats.files_failed += 1
+                self.processor._log_error(
+                    "E_MASTER_REPORT",
+                    "Failed to export translation unmatched report",
+                    file_path=unmatched_report_path,
+                    exc=exc,
+                )
+                raise
 
         open_apply_elapsed = 0.0
         save_elapsed = 0.0
@@ -248,4 +284,6 @@ class UpdateMasterExecutor(BaseMasterUpdateExecutor):
             overwritten_cells=overwritten_cells,
             filled_blank_cells=filled_blank_cells,
             skipped_new_keys=skipped_new_keys,
+            unmatched_entries=unmatched_entries,
+            unmatched_report_path=unmatched_report_path,
         )

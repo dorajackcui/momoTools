@@ -140,6 +140,8 @@ Mode behavior:
   - existing keys only
   - identity is fixed to `combined_key`
   - duplicate source identities follow last-processed overwrite per touched cell
+  - exports an unmatched-entry Excel report for every run using the same `combined_key` match rule
+  - report rows are emitted per unmatched source identity and include `key`, `match`, source file, and expanded content columns
 
 Match-column behavior:
 

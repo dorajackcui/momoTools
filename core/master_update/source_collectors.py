@@ -5,12 +5,14 @@ from typing import Any, Callable, Sequence
 from core.kernel import build_combined_key, open_workbook, safe_to_str
 from .policies import ROW_KEY_POLICY_COMBINED, ROW_KEY_POLICY_KEY_ONLY
 from .io_helpers import UNSET, merge_non_blank_cells_by_policy
+from .reporting import UnmatchedIdentityInfo
 
 
 @dataclass(frozen=True)
 class SourceCandidates:
     rows: dict[str, list[Any]]
     touched_cols_by_key: dict[str, set[int]]
+    unmatched_info_by_key: dict[str, UnmatchedIdentityInfo]
 
 
 @dataclass(frozen=True)
@@ -50,7 +52,7 @@ def _scan_source_files(
     on_log: Callable[[str], None],
     on_log_error: Callable[..., None],
     stats,
-    on_identity_row: Callable[[str, Sequence[Any]], None],
+    on_identity_row: Callable[[str, Sequence[Any], str], None],
 ):
     for file_index, file_path in enumerate(source_files, start=1):
         on_log(f"Merging source [{file_index}/{len(source_files)}]: {os.path.basename(file_path)}")
@@ -73,7 +75,7 @@ def _scan_source_files(
                     if not identity_key:
                         continue
                     stats.rows_scanned += 1
-                    on_identity_row(identity_key, row_values)
+                    on_identity_row(identity_key, row_values, file_path)
             stats.files_succeeded += 1
         except Exception as exc:
             stats.files_failed += 1
@@ -102,20 +104,26 @@ def collect_source_candidates(
 ) -> SourceCandidates:
     candidate_rows: dict[str, list[Any]] = {}
     touched_cols_by_key: dict[str, set[int]] = {}
+    unmatched_info_by_identity: dict[str, UnmatchedIdentityInfo] = {}
 
-    def _on_identity_row(identity_key: str, row_values: Sequence[Any]):
+    def _on_identity_row(identity_key: str, row_values: Sequence[Any], file_path: str):
+        key_text = safe_to_str(
+            row_values[key_col] if key_col < len(row_values) else None,
+            strip=True,
+        )
+        match_text = safe_to_str(
+            row_values[match_col] if match_col < len(row_values) else None,
+            strip=True,
+        )
+        is_new_identity = identity_key not in candidate_rows
         if identity_key not in candidate_rows:
             base_row = [UNSET] * max_col
-            base_row[key_col] = safe_to_str(
-                row_values[key_col] if key_col < len(row_values) else None,
-                strip=True,
-            )
-            base_row[match_col] = safe_to_str(
-                row_values[match_col] if match_col < len(row_values) else None,
-                strip=True,
-            )
+            base_row[key_col] = key_text
+            base_row[match_col] = match_text
             candidate_rows[identity_key] = base_row
             touched_cols_by_key[identity_key] = set()
+
+        touched_cols_for_row: set[int] = set()
 
         merge_non_blank_cells_by_policy(
             target_row=candidate_rows[identity_key],
@@ -123,8 +131,20 @@ def collect_source_candidates(
             content_col_indexes=content_col_indexes,
             cell_write_policy=cell_write_policy,
             priority_winner_policy=priority_winner_policy,
-            touched_cols=touched_cols_by_key[identity_key],
+            touched_cols=touched_cols_for_row,
         )
+        if touched_cols_for_row:
+            touched_cols_by_key[identity_key].update(touched_cols_for_row)
+        if is_new_identity or touched_cols_for_row:
+            unmatched_info_by_identity[identity_key] = UnmatchedIdentityInfo(
+                key_text=key_text,
+                match_text=match_text,
+                source_file=os.path.basename(file_path),
+                content_values=tuple(
+                    None if candidate_rows[identity_key][col_idx] is UNSET else candidate_rows[identity_key][col_idx]
+                    for col_idx in content_col_indexes
+                ),
+            )
 
     _scan_source_files(
         source_files=source_files,
@@ -142,6 +162,7 @@ def collect_source_candidates(
     return SourceCandidates(
         rows=candidate_rows,
         touched_cols_by_key=touched_cols_by_key,
+        unmatched_info_by_key=unmatched_info_by_identity,
     )
 
 
@@ -159,7 +180,7 @@ def collect_source_rows_dense(
 ) -> DenseSourceRows:
     candidate_rows: dict[str, list[Any]] = {}
 
-    def _on_identity_row(identity_key: str, row_values: Sequence[Any]):
+    def _on_identity_row(identity_key: str, row_values: Sequence[Any], _file_path: str):
         row_buffer = [
             row_values[col_idx] if col_idx < len(row_values) else None
             for col_idx in range(max_col)

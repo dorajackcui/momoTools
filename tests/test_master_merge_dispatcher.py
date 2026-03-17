@@ -32,6 +32,8 @@ class FakeExecutor:
             added_rows=0,
             merged_keys=1,
             source_files=len(source_files),
+            unmatched_entries=2,
+            unmatched_report_path="C:/tmp/translation_unmatched_report.xlsx",
         )
 
 
@@ -80,6 +82,8 @@ class MasterMergeDispatcherTestCase(unittest.TestCase):
         self.assertEqual(processor.stats.files_total, 3)
         self.assertEqual(result.updated_cells, 1)
         self.assertEqual(result.source_files, 2)
+        self.assertEqual(result.unmatched_entries, 2)
+        self.assertEqual(result.unmatched_report_path, "C:/tmp/translation_unmatched_report.xlsx")
 
     def test_facade_api_methods_exist(self):
         processor = MasterMergeProcessor(log_callback=lambda _msg: None)

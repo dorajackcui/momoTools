@@ -364,6 +364,12 @@ class FakeMergeProcessor:
         self.policies = None
         self.row_key_policy = None
         self.listed_files = []
+        self.result = MasterMergeResult(
+            updated_cells=4,
+            added_rows=2,
+            merged_keys=6,
+            source_files=0,
+        )
 
     def set_master_file(self, path):
         self.master_file = path
@@ -392,10 +398,15 @@ class FakeMergeProcessor:
 
     def process_files(self):
         return MasterMergeResult(
-            updated_cells=4,
-            added_rows=2,
-            merged_keys=6,
+            updated_cells=self.result.updated_cells,
+            added_rows=self.result.added_rows,
+            merged_keys=self.result.merged_keys,
             source_files=len(self.priority_files or ()),
+            overwritten_cells=self.result.overwritten_cells,
+            filled_blank_cells=self.result.filled_blank_cells,
+            skipped_new_keys=self.result.skipped_new_keys,
+            unmatched_entries=self.result.unmatched_entries,
+            unmatched_report_path=self.result.unmatched_report_path,
         )
 
 
@@ -755,6 +766,8 @@ class ControllersTestCase(unittest.TestCase):
             ),
         )
         self.assertEqual(processor.row_key_policy, ROW_KEY_POLICY_KEY_ONLY)
+        self.assertTrue(dialogs.infos)
+        self.assertNotIn("Unmatched report:", dialogs.infos[0][1])
 
     def test_update_content_controller_uses_overwrite_existing_only_policies(self):
         config = MergeMastersConfig(
@@ -765,6 +778,15 @@ class ControllersTestCase(unittest.TestCase):
         )
         frame = FakeMergeFrame(config)
         processor = FakeMergeProcessor()
+        processor.result = MasterMergeResult(
+            updated_cells=1,
+            added_rows=0,
+            merged_keys=1,
+            source_files=0,
+            skipped_new_keys=2,
+            unmatched_entries=2,
+            unmatched_report_path="C:/tmp/translation_unmatched_report.xlsx",
+        )
         dialogs = FakeDialogs()
         controller = UpdateContentController(frame, processor, dialog_service=dialogs)
         controller.master_file_path = "master.xlsx"
@@ -781,6 +803,12 @@ class ControllersTestCase(unittest.TestCase):
             ),
         )
         self.assertEqual(processor.row_key_policy, ROW_KEY_POLICY_COMBINED)
+        self.assertTrue(dialogs.infos)
+        self.assertIn("Unmatched entries: 2", dialogs.infos[0][1])
+        self.assertIn(
+            "Unmatched report: C:/tmp/translation_unmatched_report.xlsx",
+            dialogs.infos[0][1],
+        )
 
     def test_clearer_delete_requires_confirm(self):
         frame = FakeClearerFrame(ClearerConfig(column_number=5))

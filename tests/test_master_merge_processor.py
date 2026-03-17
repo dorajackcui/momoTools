@@ -42,6 +42,15 @@ def read_cell(path: Path, row: int, col: int):
         workbook.close()
 
 
+def read_rows(path: Path) -> list[list[object]]:
+    workbook = openpyxl.load_workbook(path, data_only=True)
+    try:
+        worksheet = workbook.active
+        return [list(row) for row in worksheet.iter_rows(values_only=True)]
+    finally:
+        workbook.close()
+
+
 class MasterMergeProcessorTestCase(unittest.TestCase):
     def setUp(self):
         self.temp_dir = tempfile.TemporaryDirectory()
@@ -105,6 +114,8 @@ class MasterMergeProcessorTestCase(unittest.TestCase):
         self.assertEqual(result.overwritten_cells, 0)
         self.assertEqual(result.filled_blank_cells, 0)
         self.assertEqual(result.skipped_new_keys, 0)
+        self.assertEqual(result.unmatched_entries, 0)
+        self.assertEqual(result.unmatched_report_path, "")
 
         self.assertEqual(read_row(master_path, 2, 4), ["K1", "M1", None, "MASTER_KEEP"])
         self.assertEqual(read_row(master_path, 3, 4), ["K2", "M2", "NEW_HIGH", "HIGH_V2"])
@@ -175,6 +186,8 @@ class MasterMergeProcessorTestCase(unittest.TestCase):
         self.assertEqual(result.overwritten_cells, 1)
         self.assertEqual(result.filled_blank_cells, 0)
         self.assertEqual(result.skipped_new_keys, 0)
+        self.assertEqual(result.unmatched_entries, 0)
+        self.assertEqual(result.unmatched_report_path, "")
 
         self.assertEqual(read_row(master_path, 2, 3), ["K1", "M1", "FROM_SECOND"])
         self.assertEqual(read_row(master_path, 3, 3), ["K2", "M2", "NEW_SECOND"])
@@ -216,6 +229,16 @@ class MasterMergeProcessorTestCase(unittest.TestCase):
         self.assertEqual(result.filled_blank_cells, 1)
         self.assertEqual(result.overwritten_cells, 0)
         self.assertEqual(result.skipped_new_keys, 1)
+        self.assertEqual(result.unmatched_entries, 1)
+        self.assertTrue(result.unmatched_report_path)
+        self.assertTrue(Path(result.unmatched_report_path).exists())
+        self.assertEqual(
+            read_rows(Path(result.unmatched_report_path)),
+            [
+                ["key", "match", "source_file", "content_col_3"],
+                ["K3", "M3", "source.xlsx", "SHOULD_SKIP"],
+            ],
+        )
         self.assertEqual(read_row(master_path, 2, 3), ["K1", "M1", "UPDATE_EXISTING"])
 
     def test_duplicate_master_keys_are_synchronized(self):
@@ -395,7 +418,150 @@ class MasterMergeProcessorTestCase(unittest.TestCase):
 
         self.assertEqual(result.updated_cells, 0)
         self.assertEqual(result.skipped_new_keys, 1)
+        self.assertEqual(result.unmatched_entries, 1)
+        self.assertTrue(Path(result.unmatched_report_path).exists())
+        self.assertEqual(
+            read_rows(Path(result.unmatched_report_path)),
+            [
+                ["key", "match", "source_file", "content_col_3"],
+                ["K1", "M2", "source.xlsx", "NEW_V"],
+            ],
+        )
         self.assertEqual(read_row(master_path, 2, 3), ["K1", "M1", "OLD_V"])
+
+    def test_update_content_unmatched_report_keeps_one_row_per_unmatched_identity(self):
+        master_path = self.root / "master.xlsx"
+        updates_dir = self.root / "updates"
+        updates_dir.mkdir()
+
+        write_workbook(
+            master_path,
+            [
+                ["key", "match", "v1"],
+                ["K1", "M1", "OLD_V"],
+            ],
+        )
+
+        first_path = updates_dir / "a.xlsx"
+        second_path = updates_dir / "b.xlsx"
+        write_workbook(
+            first_path,
+            [
+                ["key", "match", "v1"],
+                ["K2", "M2", "MISS_1"],
+                ["K2", "M3", "MISS_2"],
+            ],
+        )
+        write_workbook(
+            second_path,
+            [
+                ["key", "match", "v1"],
+                ["K2", "M2", "MISS_1_LATER"],
+                ["K3", "M4", "MISS_3"],
+            ],
+        )
+
+        processor = self._build_processor(master_path, updates_dir, [first_path, second_path])
+        processor.set_policies(
+            cell_write_policy=CELL_WRITE_POLICY_OVERWRITE_NON_BLANK,
+            key_admission_policy=KEY_ADMISSION_POLICY_EXISTING_ONLY,
+            priority_winner_policy=PRIORITY_WINNER_POLICY_LAST_PROCESSED,
+        )
+
+        result = processor.process_files()
+
+        self.assertEqual(result.updated_cells, 0)
+        self.assertEqual(result.skipped_new_keys, 3)
+        self.assertEqual(result.unmatched_entries, 3)
+        self.assertTrue(Path(result.unmatched_report_path).exists())
+        self.assertEqual(
+            read_rows(Path(result.unmatched_report_path)),
+            [
+                ["key", "match", "source_file", "content_col_3"],
+                ["K2", "M2", "b.xlsx", "MISS_1_LATER"],
+                ["K2", "M3", "a.xlsx", "MISS_2"],
+                ["K3", "M4", "b.xlsx", "MISS_3"],
+            ],
+        )
+
+    def test_update_content_always_generates_report_even_when_no_unmatched_entries(self):
+        master_path = self.root / "master.xlsx"
+        updates_dir = self.root / "updates"
+        updates_dir.mkdir()
+
+        write_workbook(
+            master_path,
+            [
+                ["key", "match", "v1"],
+                ["K1", "M1", "OLD_V"],
+            ],
+        )
+        source_path = updates_dir / "source.xlsx"
+        write_workbook(
+            source_path,
+            [
+                ["key", "match", "v1"],
+                ["K1", "M1", "NEW_V"],
+            ],
+        )
+
+        processor = self._build_processor(master_path, updates_dir, [source_path])
+        processor.set_policies(
+            cell_write_policy=CELL_WRITE_POLICY_OVERWRITE_NON_BLANK,
+            key_admission_policy=KEY_ADMISSION_POLICY_EXISTING_ONLY,
+            priority_winner_policy=PRIORITY_WINNER_POLICY_LAST_PROCESSED,
+        )
+
+        result = processor.process_files()
+
+        self.assertEqual(result.updated_cells, 1)
+        self.assertEqual(result.skipped_new_keys, 0)
+        self.assertEqual(result.unmatched_entries, 0)
+        self.assertTrue(Path(result.unmatched_report_path).exists())
+        self.assertEqual(
+            read_rows(Path(result.unmatched_report_path)),
+            [["key", "match", "source_file", "content_col_3"]],
+        )
+
+    def test_update_content_unmatched_report_expands_multiple_content_columns(self):
+        master_path = self.root / "master.xlsx"
+        updates_dir = self.root / "updates"
+        updates_dir.mkdir()
+
+        write_workbook(
+            master_path,
+            [
+                ["key", "match", "v1", "v2"],
+                ["K1", "M1", "OLD_V1", "OLD_V2"],
+            ],
+        )
+        source_path = updates_dir / "source.xlsx"
+        write_workbook(
+            source_path,
+            [
+                ["key", "match", "v1", "v2"],
+                ["K2", "M2", "MISS_V1", "MISS_V2"],
+            ],
+        )
+
+        processor = self._build_processor(master_path, updates_dir, [source_path])
+        processor.set_columns(0, 1, 3)
+        processor.set_policies(
+            cell_write_policy=CELL_WRITE_POLICY_OVERWRITE_NON_BLANK,
+            key_admission_policy=KEY_ADMISSION_POLICY_EXISTING_ONLY,
+            priority_winner_policy=PRIORITY_WINNER_POLICY_LAST_PROCESSED,
+        )
+
+        result = processor.process_files()
+
+        self.assertEqual(result.skipped_new_keys, 1)
+        self.assertEqual(
+            read_rows(Path(result.unmatched_report_path)),
+            [
+                ["key", "match", "source_file", "content_col_3", "content_col_4"],
+                ["K2", "M2", "source.xlsx", "MISS_V1", "MISS_V2"],
+            ],
+        )
 
     def test_update_master_dense_rows_overwrite_untouched_cols_too(self):
         master_path = self.root / "master.xlsx"

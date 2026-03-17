@@ -93,6 +93,8 @@ class BaseMasterUpdateExecutor:
         overwritten_cells: int,
         filled_blank_cells: int,
         skipped_new_keys: int,
+        unmatched_entries: int = 0,
+        unmatched_report_path: str = "",
     ) -> MasterMergeResult:
         self.processor.stats.files_succeeded += 1
         self.processor.stats.cells_updated = updated_cells
@@ -104,6 +106,8 @@ class BaseMasterUpdateExecutor:
             overwritten_cells=overwritten_cells,
             filled_blank_cells=filled_blank_cells,
             skipped_new_keys=skipped_new_keys,
+            unmatched_entries=unmatched_entries,
+            unmatched_report_path=unmatched_report_path,
         )
 
 

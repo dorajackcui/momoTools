@@ -10,3 +10,5 @@ class MasterMergeResult:
     overwritten_cells: int = 0
     filled_blank_cells: int = 0
     skipped_new_keys: int = 0
+    unmatched_entries: int = 0
+    unmatched_report_path: str = ""

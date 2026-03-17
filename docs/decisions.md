@@ -37,6 +37,7 @@ This directory is the canonical home for active project documentation. Historica
   - existing keys only
   - uses `combined_key`
   - match column remains part of row identity, not a content target
+  - every run exports an unmatched-entry detail report using the same `combined_key` match rule
 
 ## Terminology Decisions
 

@@ -76,6 +76,7 @@ The current UI organizes tools into three notebook groups:
   - `Merge Masters`
   - `Source Text`
   - `Translation`
+    - exports a per-run unmatched-segment Excel report with `key`, `match`, source file, and content columns
 
 ## Observability
 
