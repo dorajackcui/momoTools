@@ -4,7 +4,12 @@ from typing import Any, Callable, Sequence
 
 from core.kernel import build_combined_key, open_workbook, safe_to_str
 from .policies import ROW_KEY_POLICY_COMBINED, ROW_KEY_POLICY_KEY_ONLY
-from .io_helpers import UNSET, merge_non_blank_cells_by_policy
+from .io_helpers import (
+    UNSET,
+    merge_non_blank_cells_by_policy,
+    normalize_content_row_values,
+    normalize_content_value,
+)
 from .reporting import UnmatchedIdentityInfo
 
 
@@ -105,6 +110,7 @@ def collect_source_candidates(
     candidate_rows: dict[str, list[Any]] = {}
     touched_cols_by_key: dict[str, set[int]] = {}
     unmatched_info_by_identity: dict[str, UnmatchedIdentityInfo] = {}
+    content_col_set = set(content_col_indexes)
 
     def _on_identity_row(identity_key: str, row_values: Sequence[Any], file_path: str):
         key_text = safe_to_str(
@@ -119,7 +125,13 @@ def collect_source_candidates(
         if identity_key not in candidate_rows:
             base_row = [UNSET] * max_col
             base_row[key_col] = key_text
-            base_row[match_col] = match_text
+            base_row[match_col] = (
+                normalize_content_value(
+                    row_values[match_col] if match_col < len(row_values) else None
+                )
+                if match_col in content_col_set
+                else match_text
+            )
             candidate_rows[identity_key] = base_row
             touched_cols_by_key[identity_key] = set()
 
@@ -173,26 +185,30 @@ def collect_source_rows_dense(
     match_col: int,
     row_key_policy: str,
     max_col: int,
+    content_col_indexes: Sequence[int],
     key_separator: str,
     on_log: Callable[[str], None],
     on_log_error: Callable[..., None],
     stats,
 ) -> DenseSourceRows:
     candidate_rows: dict[str, list[Any]] = {}
+    content_col_set = set(content_col_indexes)
 
     def _on_identity_row(identity_key: str, row_values: Sequence[Any], _file_path: str):
-        row_buffer = [
-            row_values[col_idx] if col_idx < len(row_values) else None
-            for col_idx in range(max_col)
-        ]
+        row_buffer = normalize_content_row_values(
+            row_values=row_values,
+            max_col=max_col,
+            content_col_indexes=content_col_indexes,
+        )
         row_buffer[key_col] = safe_to_str(
             row_values[key_col] if key_col < len(row_values) else None,
             strip=True,
         )
-        row_buffer[match_col] = safe_to_str(
-            row_values[match_col] if match_col < len(row_values) else None,
-            strip=True,
-        )
+        if match_col not in content_col_set:
+            row_buffer[match_col] = safe_to_str(
+                row_values[match_col] if match_col < len(row_values) else None,
+                strip=True,
+            )
         # Dense Update Master mode treats source rows as complete.
         # For duplicate identities, later processed rows replace the whole row.
         candidate_rows[identity_key] = row_buffer

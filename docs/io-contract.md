@@ -120,6 +120,14 @@ Supported row identity policies:
 - `combined_key`
 - `key_only`
 
+Content normalization:
+
+- content cells in this suite are normalized through a master-update-local wrapper around `safe_to_str(..., strip=False)`
+- `None` becomes `""`
+- numeric values are persisted as text such as `"0"`, `"0.0"`, and `"12.34"`
+- date-like Excel values are also stringified through the same shared path, for example `"2026-03-16 00:00:00"` when that is `str(value)`
+- row matching still uses the row-identity normalization rules above; content normalization does not change key admission or identity matching
+
 Mode behavior:
 
 - `Merge Masters`
@@ -127,16 +135,19 @@ Mode behavior:
   - source rows are treated as complete rows
   - allows new keys
   - default identity is `combined_key`, with UI support for `key_only`
+  - appended content cells are written as normalized strings
   - when `key_only` is selected, source rows still require a non-blank `match_col` value; rows with blank match cells are skipped instead of appended
   - duplicate source identities keep the first processed full row
 - `Update Master`
   - dense-row overwrite
+  - updated and appended content cells are written as normalized strings
   - blank values are valid update values
   - allows new keys
   - identity is fixed to `key_only`
   - duplicate source identities keep the last processed full row
 - `Update Content`
   - sparse non-blank overwrite
+  - written content cells and unmatched-report content columns use the same normalized string values
   - existing keys only
   - identity is fixed to `combined_key`
   - duplicate source identities follow last-processed overwrite per touched cell

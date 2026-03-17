@@ -65,6 +65,7 @@ class UpdateMasterExecutor(BaseMasterUpdateExecutor):
                 match_col=self.match_col,
                 row_key_policy=self.processor.row_key_policy,
                 max_col=max_col,
+                content_col_indexes=content_col_indexes,
                 key_separator=self.processor.io_contract.key_separator,
                 on_log=self.processor.log,
                 on_log_error=self.processor._log_error,

@@ -4,6 +4,7 @@ from typing import Any, Sequence
 
 from core.kernel import is_blank_value, open_workbook, safe_to_str
 from core.master_update.executors.base import BaseMasterUpdateExecutor
+from core.master_update.io_helpers import normalize_content_row_values
 from core.master_update.policies import ROW_KEY_POLICY_COMBINED
 from core.master_update.source_collectors import (
     build_identity_key_from_values,
@@ -19,12 +20,13 @@ class MergeMastersExecutor(BaseMasterUpdateExecutor):
 
     def run(self, source_files: Sequence[str]):
         total_start = perf_counter()
-        max_col, _ = self.resolve_layout()
+        max_col, content_col_indexes = self.resolve_layout()
 
         collect_start = perf_counter()
         candidate_rows = self._collect_append_candidates(
             source_files=source_files,
             max_col=max_col,
+            content_col_indexes=content_col_indexes,
         )
         collect_sources_elapsed = perf_counter() - collect_start
 
@@ -132,8 +134,10 @@ class MergeMastersExecutor(BaseMasterUpdateExecutor):
         *,
         source_files: Sequence[str],
         max_col: int,
+        content_col_indexes: Sequence[int],
     ) -> dict[str, list[Any]]:
         candidate_rows: dict[str, list[Any]] = {}
+        content_col_set = set(content_col_indexes)
         for file_index, file_path in enumerate(source_files, start=1):
             self.processor.log(
                 f"Merging source [{file_index}/{len(source_files)}]: {os.path.basename(file_path)}"
@@ -165,18 +169,20 @@ class MergeMastersExecutor(BaseMasterUpdateExecutor):
                             # Keep the first-seen full row for duplicate identities.
                             continue
 
-                        row_buffer = [
-                            row_values[col_idx] if col_idx < len(row_values) else None
-                            for col_idx in range(max_col)
-                        ]
+                        row_buffer = normalize_content_row_values(
+                            row_values=row_values,
+                            max_col=max_col,
+                            content_col_indexes=content_col_indexes,
+                        )
                         row_buffer[self.key_col] = safe_to_str(
                             row_values[self.key_col] if self.key_col < len(row_values) else None,
                             strip=True,
                         )
-                        row_buffer[self.match_col] = safe_to_str(
-                            row_values[self.match_col] if self.match_col < len(row_values) else None,
-                            strip=True,
-                        )
+                        if self.match_col not in content_col_set:
+                            row_buffer[self.match_col] = safe_to_str(
+                                row_values[self.match_col] if self.match_col < len(row_values) else None,
+                                strip=True,
+                            )
                         candidate_rows[identity_key] = row_buffer
                 self.processor.stats.files_succeeded += 1
             except Exception as exc:

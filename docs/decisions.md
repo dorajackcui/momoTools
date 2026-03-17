@@ -25,17 +25,20 @@ This directory is the canonical home for active project documentation. Historica
   - append-oriented flow
   - allows new keys
   - supports `combined_key` or `key_only`
+  - appended content cells are persisted as strings
   - when `key_only` is used, source rows with blank `match` are skipped
   - keeps first-processed duplicate source row for the same identity
 - `Update Master`
   - dense-row overwrite behavior
   - allows new keys
   - uses `key_only`
+  - content cells are persisted as strings, including match-column updates
   - match column is treated as updatable content
 - `Update Content`
   - sparse non-blank overwrite behavior
   - existing keys only
   - uses `combined_key`
+  - written content cells and unmatched-report content columns are persisted as strings
   - match column remains part of row identity, not a content target
   - every run exports an unmatched-entry detail report using the same `combined_key` match rule
 - `Source+Translation`

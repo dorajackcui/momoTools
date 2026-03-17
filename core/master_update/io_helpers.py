@@ -1,6 +1,6 @@
 from typing import Any, Sequence
 
-from core.kernel import is_blank_value
+from core.kernel import is_blank_value, safe_to_str
 from .policies import (
     CELL_WRITE_POLICY_FILL_BLANK_ONLY,
     CELL_WRITE_POLICY_OVERWRITE_NON_BLANK,
@@ -8,6 +8,27 @@ from .policies import (
 )
 
 UNSET = object()
+
+
+def normalize_content_value(value: Any) -> str:
+    return safe_to_str(value, strip=False)
+
+
+def normalize_content_row_values(
+    *,
+    row_values: Sequence[Any],
+    max_col: int,
+    content_col_indexes: Sequence[int],
+) -> list[Any]:
+    row_buffer = [
+        row_values[col_idx] if col_idx < len(row_values) else None
+        for col_idx in range(max_col)
+    ]
+    for col_idx in content_col_indexes:
+        row_buffer[col_idx] = normalize_content_value(
+            row_values[col_idx] if col_idx < len(row_values) else None
+        )
+    return row_buffer
 
 
 def merge_non_blank_cells_by_policy(
@@ -20,7 +41,9 @@ def merge_non_blank_cells_by_policy(
     touched_cols: set[int] | None = None,
 ):
     for col_idx in content_col_indexes:
-        source_value = source_row[col_idx] if col_idx < len(source_row) else None
+        source_value = normalize_content_value(
+            source_row[col_idx] if col_idx < len(source_row) else None
+        )
         if is_blank_value(source_value):
             continue
 
@@ -45,6 +68,7 @@ def merge_non_blank_cells_by_policy(
 
 
 def values_equivalent(old_value: Any, new_value: Any) -> bool:
-    if is_blank_value(old_value) and is_blank_value(new_value):
+    normalized_new_value = normalize_content_value(new_value)
+    if is_blank_value(old_value) and is_blank_value(normalized_new_value):
         return True
-    return old_value == new_value
+    return old_value == normalized_new_value
