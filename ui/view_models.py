@@ -66,6 +66,15 @@ class MasterUpdateConfig:
 MergeMastersConfig = MasterUpdateConfig
 
 
+@dataclass(frozen=True)
+class SourceTranslationPipelineConfig:
+    key_col: int
+    match_col: int
+    source_priority_files: tuple[str, ...]
+    translation_priority_files: tuple[str, ...]
+    last_update_col: int = 10
+
+
 BatchMode = Literal["master_to_target_single", "target_to_master_reverse"]
 
 

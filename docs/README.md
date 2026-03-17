@@ -30,9 +30,11 @@ If you are about to change behavior:
 ## Source Of Truth
 
 - `docs/architecture.md`
-  - Layering, runtime model, tool group layout, compatibility boundaries
+  - Owns application structure: layering, runtime model, tool-group layout, compatibility boundaries
+  - Describe what exists and where orchestration lives; avoid duplicating detailed workbook rules here
 - `docs/io-contract.md`
-  - Excel normalization, blank detection, row identity, mode-specific write behavior
+  - Owns workbook behavior: Excel normalization, blank detection, row identity, mode-specific write behavior
+  - This is the only place for concrete IO semantics and pipeline execution behavior that affects results
 - `docs/development.md`
   - Environment matrix, setup workflow, quick verification defaults
 - `docs/testing.md`
@@ -40,7 +42,8 @@ If you are about to change behavior:
 - `docs/deployment.md`
   - Packaging constraints and release validation expectations
 - `docs/decisions.md`
-  - Stable policies that should not drift silently
+  - Owns stable product and engineering decisions that should not drift silently
+  - Record the durable rule or constraint, then link back to `architecture.md` or `io-contract.md` for implementation/detail when needed
 
 Avoid restating the same rule in multiple active docs. Link back to the owning doc instead.
 
@@ -51,6 +54,9 @@ Avoid restating the same rule in multiple active docs. Link back to the owning d
   - Run `.\scripts\python.cmd scripts/run_regression_suite.py --with-golden`
 - Changing app structure, layer boundaries, or task-runner behavior:
   - Update `docs/architecture.md`
+- Changing UI composition or orchestration shape without changing workbook results:
+  - Update `docs/architecture.md`
+  - Update `docs/decisions.md` only if the orchestration rule is intended to stay stable
 - Changing environment assumptions, setup steps, or what works without COM:
   - Update `docs/development.md`
   - Update `docs/testing.md` if the expected validation path changes
@@ -60,5 +66,12 @@ Avoid restating the same rule in multiple active docs. Link back to the owning d
   - Update `docs/deployment.md`
 - Changing a stable business rule or mode policy:
   - Update `docs/decisions.md`
+
+## Doc Boundaries
+
+- Put structural facts in `architecture.md`: tabs, layers, runtime ownership, compatibility surfaces.
+- Put behavioral contracts in `io-contract.md`: matching, blank handling, overwrite rules, stage execution semantics.
+- Put durable guardrails in `decisions.md`: rules that should not silently drift, even if implementation moves.
+- If a rule needs examples or exact semantics, prefer one owning doc and have the others reference it briefly.
 
 Historical or superseded material belongs in `archive/old_docs/`, not in active docs.

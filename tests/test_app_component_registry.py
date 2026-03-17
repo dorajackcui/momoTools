@@ -58,6 +58,10 @@ class RecordingUpdateContentController(RecordingController):
     instances = []
 
 
+class RecordingSourceTranslationPipelineController(RecordingController):
+    instances = []
+
+
 class RecordingStatsController(RecordingController):
     instances = []
 
@@ -118,6 +122,10 @@ class RecordingUpdateContentFrame(RecordingFrame):
     instances = []
 
 
+class RecordingSourceTranslationPipelineFrame(RecordingFrame):
+    instances = []
+
+
 class RecordingStatsFrame(RecordingFrame):
     instances = []
 
@@ -138,6 +146,7 @@ class AppComponentRegistryTestCase(unittest.TestCase):
             RecordingMasterMergeController,
             RecordingUpdateMasterController,
             RecordingUpdateContentController,
+            RecordingSourceTranslationPipelineController,
             RecordingStatsController,
             RecordingTerminologyController,
             RecordingUpdaterFrame,
@@ -149,6 +158,7 @@ class AppComponentRegistryTestCase(unittest.TestCase):
             RecordingMasterMergeFrame,
             RecordingUpdateMasterFrame,
             RecordingUpdateContentFrame,
+            RecordingSourceTranslationPipelineFrame,
             RecordingStatsFrame,
             RecordingTerminologyFrame,
         ]:
@@ -198,6 +208,12 @@ class AppComponentRegistryTestCase(unittest.TestCase):
             stack.enter_context(patch("app.MasterMergeController", RecordingMasterMergeController))
             stack.enter_context(patch("app.UpdateMasterController", RecordingUpdateMasterController))
             stack.enter_context(patch("app.UpdateContentController", RecordingUpdateContentController))
+            stack.enter_context(
+                patch(
+                    "app.SourceTranslationPipelineController",
+                    RecordingSourceTranslationPipelineController,
+                )
+            )
             stack.enter_context(patch("app.UntranslatedStatsController", RecordingStatsController))
             stack.enter_context(patch("app.TerminologyExtractorController", RecordingTerminologyController))
             stack.enter_context(patch("app.UpdaterFrame", RecordingUpdaterFrame))
@@ -208,6 +224,12 @@ class AppComponentRegistryTestCase(unittest.TestCase):
             stack.enter_context(patch("app.MergeMastersFrame", RecordingMasterMergeFrame))
             stack.enter_context(patch("app.UpdateMasterFrame", RecordingUpdateMasterFrame))
             stack.enter_context(patch("app.UpdateContentFrame", RecordingUpdateContentFrame))
+            stack.enter_context(
+                patch(
+                    "app.SourceTranslationPipelineFrame",
+                    RecordingSourceTranslationPipelineFrame,
+                )
+            )
             stack.enter_context(patch("app.UntranslatedStatsFrame", RecordingStatsFrame))
             stack.enter_context(patch("app.TerminologyExtractorFrame", RecordingTerminologyFrame))
             instance.init_components()
@@ -226,7 +248,7 @@ class AppComponentRegistryTestCase(unittest.TestCase):
         )
         self.assertEqual(
             [call.kwargs["text"] for call in update_master_notebook.add.call_args_list],
-            ["Merge Masters", "Source Text", "Translation"],
+            ["Merge Masters", "Source Text", "Translation", "Source+Translation"],
         )
 
         self.assertEqual(len(RecordingUpdaterController.instances), 1)
@@ -285,6 +307,15 @@ class AppComponentRegistryTestCase(unittest.TestCase):
         )
         self.assertIs(
             RecordingUpdateContentController.instances[0].kwargs["task_runner"],
+            instance.task_runner,
+        )
+        self.assertEqual(len(RecordingSourceTranslationPipelineController.instances), 1)
+        self.assertIs(
+            RecordingSourceTranslationPipelineController.instances[0].args[0],
+            instance.master_merge_processor,
+        )
+        self.assertIs(
+            RecordingSourceTranslationPipelineController.instances[0].kwargs["task_runner"],
             instance.task_runner,
         )
         self.assertEqual(len(RecordingStatsController.instances), 1)

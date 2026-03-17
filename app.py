@@ -14,6 +14,7 @@ from controllers import (
     DeepReplaceController,
     MasterMergeController,
     ReverseUpdaterController,
+    SourceTranslationPipelineController,
     TerminologyExtractorController,
     UpdateContentController,
     UpdateMasterController,
@@ -30,6 +31,7 @@ from ui.views import (
     DeepReplaceFrame,
     MergeMastersFrame,
     ReverseUpdaterFrame,
+    SourceTranslationPipelineFrame,
     TerminologyExtractorFrame,
     UntranslatedStatsFrame,
     UpdateContentFrame,
@@ -215,6 +217,16 @@ class ExcelUpdaterApp:
                     task_runner=app.task_runner,
                 ),
                 frame_cls=UpdateContentFrame,
+            ),
+            ToolSpec(
+                group="update_master",
+                tab_text="Source+Translation",
+                controller_factory=lambda app: SourceTranslationPipelineController(
+                    None,
+                    app.master_merge_processor,
+                    task_runner=app.task_runner,
+                ),
+                frame_cls=SourceTranslationPipelineFrame,
             ),
         ]
 

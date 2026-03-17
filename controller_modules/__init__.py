@@ -11,6 +11,7 @@ from .multi_column import MultiColumnController
 from .reverse_updater import ReverseUpdaterController
 from .update_content import UpdateContentController
 from .update_master import UpdateMasterController
+from .source_translation_pipeline import SourceTranslationPipelineController
 from .untranslated_stats import UntranslatedStatsController
 from .terminology_extractor import TerminologyExtractorController
 
@@ -26,6 +27,7 @@ __all__ = [
     "MasterMergeController",
     "UpdateMasterController",
     "UpdateContentController",
+    "SourceTranslationPipelineController",
     "MultiColumnController",
     "ReverseUpdaterController",
     "UntranslatedStatsController",

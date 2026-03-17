@@ -13,6 +13,7 @@ from ui.views.master_update_base import BaseMasterUpdateFrame
 from ui.views.merge_masters import MergeMastersFrame
 from ui.views.multi_column import MultiColumnFrame
 from ui.views.reverse_updater import ReverseUpdaterFrame
+from ui.views.source_translation_pipeline import SourceTranslationPipelineFrame
 from ui.views.untranslated_stats import UntranslatedStatsFrame
 from ui.views.update_content import UpdateContentFrame
 from ui.views.update_master import UpdateMasterFrame
@@ -32,6 +33,7 @@ __all__ = [
     "MergeMastersFrame",
     "UpdateMasterFrame",
     "UpdateContentFrame",
+    "SourceTranslationPipelineFrame",
     "MultiColumnFrame",
     "ReverseUpdaterFrame",
 ]

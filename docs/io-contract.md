@@ -142,6 +142,12 @@ Mode behavior:
   - duplicate source identities follow last-processed overwrite per touched cell
   - exports an unmatched-entry Excel report for every run using the same `combined_key` match rule
   - report rows are emitted per unmatched source identity and include `key`, `match`, source file, and expanded content columns
+- `Source+Translation`
+  - composed pipeline flow
+  - shares one master workbook and one `key_col` / `match_col` / `last_update_col` setting set
+  - takes separate update folders and priority orders for the `Source Text` and `Translation` stages
+  - runs `Update Master` semantics first, then `Update Content` semantics
+  - if the second stage fails, first-stage master writes are not rolled back
 
 Match-column behavior:
 

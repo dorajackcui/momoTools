@@ -11,6 +11,7 @@ from controllers import (
     DeepReplaceController,
     MasterMergeController,
     ReverseUpdaterController,
+    SourceTranslationPipelineController,
     UpdateContentController,
     UpdateMasterController,
     UntranslatedStatsController,
@@ -50,6 +51,7 @@ from ui.view_models import (
     ClearerConfig,
     MergeMastersConfig,
     ReverseConfig,
+    SourceTranslationPipelineConfig,
     StatsConfig,
     UpdaterConfig,
 )
@@ -355,6 +357,36 @@ class FakeMergeFrame:
         return self._config
 
 
+class FakeSourceTranslationPipelineFrame:
+    def __init__(self, config):
+        self._config = config
+        self.selected_master = ""
+        self.selected_source_folder = ""
+        self.selected_translation_folder = ""
+        self.source_priority_files = []
+        self.translation_priority_files = []
+
+    def set_master_file_label(self, path):
+        self.selected_master = path
+
+    def set_source_update_folder_label(self, path):
+        self.selected_source_folder = path
+
+    def set_translation_update_folder_label(self, path):
+        self.selected_translation_folder = path
+
+    def set_source_priority_files(self, file_paths):
+        self.source_priority_files = list(file_paths)
+
+    def set_translation_priority_files(self, file_paths):
+        self.translation_priority_files = list(file_paths)
+
+    def get_config(self):
+        if isinstance(self._config, Exception):
+            raise self._config
+        return self._config
+
+
 class FakeMergeProcessor:
     def __init__(self):
         self.master_file = None
@@ -364,12 +396,16 @@ class FakeMergeProcessor:
         self.policies = None
         self.row_key_policy = None
         self.listed_files = []
+        self.files_by_folder = {}
+        self.calls = []
+        self.logs = []
         self.result = MasterMergeResult(
             updated_cells=4,
             added_rows=2,
             merged_keys=6,
             source_files=0,
         )
+        self.result_queue = []
 
     def set_master_file(self, path):
         self.master_file = path
@@ -394,19 +430,38 @@ class FakeMergeProcessor:
         self.row_key_policy = row_key_policy
 
     def list_update_files(self, _folder_path=None):
+        folder_path = _folder_path
+        if folder_path and folder_path in self.files_by_folder:
+            return list(self.files_by_folder[folder_path])
         return list(self.listed_files)
 
+    def log(self, message):
+        self.logs.append(message)
+
     def process_files(self):
+        self.calls.append(
+            {
+                "master_file": self.master_file,
+                "update_folder": self.update_folder,
+                "columns": self.columns,
+                "priority_files": tuple(self.priority_files or ()),
+                "policies": self.policies,
+                "row_key_policy": self.row_key_policy,
+            }
+        )
+        result = self.result_queue.pop(0) if self.result_queue else self.result
+        if isinstance(result, Exception):
+            raise result
         return MasterMergeResult(
-            updated_cells=self.result.updated_cells,
-            added_rows=self.result.added_rows,
-            merged_keys=self.result.merged_keys,
+            updated_cells=result.updated_cells,
+            added_rows=result.added_rows,
+            merged_keys=result.merged_keys,
             source_files=len(self.priority_files or ()),
-            overwritten_cells=self.result.overwritten_cells,
-            filled_blank_cells=self.result.filled_blank_cells,
-            skipped_new_keys=self.result.skipped_new_keys,
-            unmatched_entries=self.result.unmatched_entries,
-            unmatched_report_path=self.result.unmatched_report_path,
+            overwritten_cells=result.overwritten_cells,
+            filled_blank_cells=result.filled_blank_cells,
+            skipped_new_keys=result.skipped_new_keys,
+            unmatched_entries=result.unmatched_entries,
+            unmatched_report_path=result.unmatched_report_path,
         )
 
 
@@ -694,6 +749,59 @@ class ControllersTestCase(unittest.TestCase):
     def test_update_content_controller_allows_empty_update_folder_selection(self):
         self._assert_update_folder_selection_allows_empty_folder(UpdateContentController)
 
+    def test_source_translation_pipeline_source_folder_refreshes_only_source_list(self):
+        config = SourceTranslationPipelineConfig(
+            key_col=0,
+            match_col=1,
+            last_update_col=10,
+            source_priority_files=tuple(),
+            translation_priority_files=tuple(),
+        )
+        frame = FakeSourceTranslationPipelineFrame(config)
+        processor = FakeMergeProcessor()
+        processor.files_by_folder = {
+            "C:/source": ["C:/source/a.xlsx", "C:/source/b.xlsx"],
+            "C:/translation": ["C:/translation/a.xlsx"],
+        }
+        controller = SourceTranslationPipelineController(frame, processor, dialog_service=FakeDialogs())
+
+        with patch("controllers.filedialog.askdirectory", return_value="C:/source"):
+            controller.select_source_update_folder()
+
+        self.assertEqual(controller.source_update_folder, "C:/source")
+        self.assertEqual(frame.selected_source_folder, "C:/source")
+        self.assertEqual(frame.source_priority_files, ["C:/source/a.xlsx", "C:/source/b.xlsx"])
+        self.assertEqual(controller.translation_update_folder, "")
+        self.assertEqual(frame.translation_priority_files, [])
+
+    def test_source_translation_pipeline_translation_folder_refreshes_only_translation_list(self):
+        config = SourceTranslationPipelineConfig(
+            key_col=0,
+            match_col=1,
+            last_update_col=10,
+            source_priority_files=tuple(),
+            translation_priority_files=tuple(),
+        )
+        frame = FakeSourceTranslationPipelineFrame(config)
+        processor = FakeMergeProcessor()
+        processor.files_by_folder = {
+            "C:/source": ["C:/source/a.xlsx"],
+            "C:/translation": ["C:/translation/a.xlsx", "C:/translation/b.xlsx"],
+        }
+        controller = SourceTranslationPipelineController(frame, processor, dialog_service=FakeDialogs())
+
+        with patch("controllers.filedialog.askdirectory", return_value="C:/translation"):
+            controller.select_translation_update_folder()
+
+        self.assertEqual(controller.translation_update_folder, "C:/translation")
+        self.assertEqual(frame.selected_translation_folder, "C:/translation")
+        self.assertEqual(
+            frame.translation_priority_files,
+            ["C:/translation/a.xlsx", "C:/translation/b.xlsx"],
+        )
+        self.assertEqual(controller.source_update_folder, "")
+        self.assertEqual(frame.source_priority_files, [])
+
     def test_merge_controller_cancel_folder_confirm_keeps_previous_state(self):
         config = MergeMastersConfig(key_col=1, match_col=2, last_update_col=10, priority_files=("a.xlsx",))
         frame = FakeMergeFrame(config)
@@ -809,6 +917,102 @@ class ControllersTestCase(unittest.TestCase):
             "Unmatched report: C:/tmp/translation_unmatched_report.xlsx",
             dialogs.infos[0][1],
         )
+
+    def test_source_translation_pipeline_runs_source_then_translation(self):
+        config = SourceTranslationPipelineConfig(
+            key_col=0,
+            match_col=1,
+            last_update_col=10,
+            source_priority_files=("C:/source/a.xlsx",),
+            translation_priority_files=("C:/translation/a.xlsx", "C:/translation/b.xlsx"),
+        )
+        frame = FakeSourceTranslationPipelineFrame(config)
+        processor = FakeMergeProcessor()
+        processor.result_queue = [
+            MasterMergeResult(
+                updated_cells=4,
+                added_rows=2,
+                merged_keys=5,
+                source_files=0,
+            ),
+            MasterMergeResult(
+                updated_cells=3,
+                added_rows=0,
+                merged_keys=5,
+                source_files=0,
+                skipped_new_keys=1,
+                unmatched_entries=1,
+                unmatched_report_path="C:/translation/report.xlsx",
+            ),
+        ]
+        dialogs = FakeDialogs()
+        controller = SourceTranslationPipelineController(frame, processor, dialog_service=dialogs)
+        controller.master_file_path = "master.xlsx"
+        controller.source_update_folder = "source_updates"
+        controller.translation_update_folder = "translation_updates"
+
+        controller.process_files()
+
+        self.assertEqual(len(processor.calls), 2)
+        self.assertEqual(processor.calls[0]["update_folder"], "source_updates")
+        self.assertEqual(
+            processor.calls[0]["priority_files"],
+            ("C:/source/a.xlsx",),
+        )
+        self.assertEqual(
+            processor.calls[0]["policies"],
+            (
+                CELL_WRITE_POLICY_OVERWRITE_NON_BLANK,
+                KEY_ADMISSION_POLICY_ALLOW_NEW,
+                PRIORITY_WINNER_POLICY_LAST_PROCESSED,
+            ),
+        )
+        self.assertEqual(processor.calls[0]["row_key_policy"], ROW_KEY_POLICY_KEY_ONLY)
+        self.assertEqual(processor.calls[1]["update_folder"], "translation_updates")
+        self.assertEqual(
+            processor.calls[1]["priority_files"],
+            ("C:/translation/a.xlsx", "C:/translation/b.xlsx"),
+        )
+        self.assertEqual(
+            processor.calls[1]["policies"],
+            (
+                CELL_WRITE_POLICY_OVERWRITE_NON_BLANK,
+                KEY_ADMISSION_POLICY_EXISTING_ONLY,
+                PRIORITY_WINNER_POLICY_LAST_PROCESSED,
+            ),
+        )
+        self.assertEqual(processor.calls[1]["row_key_policy"], ROW_KEY_POLICY_COMBINED)
+        self.assertEqual(
+            processor.logs[:2],
+            ["=== Source Text stage ===", "=== Translation stage ==="],
+        )
+        self.assertTrue(dialogs.infos)
+        self.assertIn("Source Text:", dialogs.infos[0][1])
+        self.assertIn("Translation:", dialogs.infos[0][1])
+        self.assertIn("Unmatched report: C:/translation/report.xlsx", dialogs.infos[0][1])
+
+    def test_source_translation_pipeline_stops_after_source_failure(self):
+        config = SourceTranslationPipelineConfig(
+            key_col=0,
+            match_col=1,
+            last_update_col=10,
+            source_priority_files=("C:/source/a.xlsx",),
+            translation_priority_files=("C:/translation/a.xlsx",),
+        )
+        frame = FakeSourceTranslationPipelineFrame(config)
+        processor = FakeMergeProcessor()
+        processor.result_queue = [RuntimeError("source stage failed")]
+        dialogs = FakeDialogs()
+        controller = SourceTranslationPipelineController(frame, processor, dialog_service=dialogs)
+        controller.master_file_path = "master.xlsx"
+        controller.source_update_folder = "source_updates"
+        controller.translation_update_folder = "translation_updates"
+
+        controller.process_files()
+
+        self.assertEqual(len(processor.calls), 1)
+        self.assertFalse(dialogs.infos)
+        self.assertEqual(dialogs.errors, [(strings.ERROR_TITLE, "source stage failed")])
 
     def test_clearer_delete_requires_confirm(self):
         frame = FakeClearerFrame(ClearerConfig(column_number=5))

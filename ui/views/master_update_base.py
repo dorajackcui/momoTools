@@ -5,7 +5,7 @@ from ui import strings, theme
 from ui.validators import ValidationError, parse_column_1_based_to_0_based
 from ui.view_models import MasterUpdateConfig
 from ui.views.base import BaseFrame
-from ui.widgets.factory import create_action_button, create_labeled_entry
+from ui.widgets.factory import create_labeled_entry
 
 
 class BaseMasterUpdateFrame(BaseFrame):
@@ -53,14 +53,6 @@ class BaseMasterUpdateFrame(BaseFrame):
             default_text=strings.DEFAULT_FOLDER_TEXT,
             parent=input_frame,
             button_pady=theme.SPACING_SM,
-        )
-
-        create_action_button(
-            input_frame,
-            text="Refresh file list",
-            command=self.controller.refresh_update_files,
-            button_style="Secondary.TButton",
-            pady=(theme.SPACING_XS, 0),
         )
 
         params_frame = self.create_section_card("Columns", parent=self.page_body)

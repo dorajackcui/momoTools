@@ -38,6 +38,10 @@ This directory is the canonical home for active project documentation. Historica
   - uses `combined_key`
   - match column remains part of row identity, not a content target
   - every run exports an unmatched-entry detail report using the same `combined_key` match rule
+- `Source+Translation`
+  - remains an additive UI mode rather than replacing `Source Text` or `Translation`
+  - keeps a fixed execution order: `Source Text` first, `Translation` second
+  - does not roll back first-stage writes if the translation stage fails
 
 ## Terminology Decisions
 

@@ -38,6 +38,10 @@ class ControllersImportCompatTestCase(unittest.TestCase):
             controller_modules.UpdateContentController,
         )
         self.assertIs(
+            controllers.SourceTranslationPipelineController,
+            controller_modules.SourceTranslationPipelineController,
+        )
+        self.assertIs(
             controllers.MultiColumnController,
             controller_modules.MultiColumnController,
         )
