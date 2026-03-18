@@ -1,2 +1,3 @@
 #!/bin/sh
-py -3 scripts/git_hooks/block_private_data.py --mode pre-commit
+py -3 scripts/git_hooks/block_private_data.py --mode pre-commit || exit $?
+py -3 scripts/check_docs_system.py --staged-only || exit $?

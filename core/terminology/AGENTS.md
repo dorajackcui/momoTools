@@ -2,41 +2,38 @@
 
 ## What This Directory Owns
 
-`core/terminology/` is the staged terminology extraction pipeline: config loading, file discovery, candidate extraction, normalization, aggregation, relation building, and Excel export.
+`core/terminology/` owns the staged terminology extraction pipeline: config loading, file discovery, candidate extraction, normalization, aggregation, relation building, review output, and Excel export.
 
-## Stable Rules
+## Canonical Docs To Update
 
-- Terminology config version is currently `1`.
-- `extractors` are required in terminology config.
-- `compound_split` remains parser-compatible but is ignored by the runtime extraction stage.
-- Exported summaries must continue to distinguish `body` and `suffix` term types.
-- `relations_summary` continues to cover both `cross_file` and `affix_group` relations.
+- `docs/decisions.md`
+- `docs/io-contract.md` when export workbook expectations change
+- `docs/testing.md`
+- `docs/architecture.md` when orchestration or integration boundaries move
 
-If those rules change, update `docs/decisions.md`. If output sheet semantics change, update `docs/io-contract.md` when the change affects workbook contract expectations.
+## Change Routing
 
-## Pipeline Notes
+- Terminology config compatibility or durable terminology-output guarantees -> `docs/decisions.md`
+- Export sheet or column semantics that affect downstream workbook expectations -> `docs/io-contract.md`
+- Pipeline integration or orchestration boundary changes -> `docs/architecture.md`
+- Minimum verification changes -> `docs/testing.md`
+- Directory-only editing guidance, routing, or minimum verification for `core/terminology/` -> `core/terminology/AGENTS.md`
 
-- Discovery and filtering happen before extraction.
-- Runtime extraction currently builds only record and tag-span extractors.
-- `compound_split` is carried for compatibility and later relation logic, not for direct runtime candidate extraction.
-- Export schema changes are high risk because they can break downstream review spreadsheets and regression expectations.
+## Local Invariants
+
+- Terminology config compatibility and durable output guarantees are owned by `docs/decisions.md`. Owner: `docs/decisions.md`
+- Workbook-facing export contract changes belong in `docs/io-contract.md` when downstream spreadsheets rely on them. Owner: `docs/io-contract.md`
+- Export schema changes are high risk because they can break review spreadsheets and regression expectations. Owner: local
+- Prefer focused pipeline-stage changes over broad processor branching. Owner: local
 
 ## Modification Boundaries
 
 - Keep UI path-state or form behavior out of this directory.
-- Do not silently change exporter sheet names or summary columns without updating tests and docs.
-- Prefer small pipeline-stage changes over broad processor branching.
-
-## What To Re-Read Before Editing
-
-- `docs/decisions.md`
-- `docs/testing.md`
-- `docs/sample_terminology_rules.json`
-- `tests/test_terminology_processor.py`
-- `tests/test_terminology_extractors.py`
+- Do not silently change exporter sheet names or summary columns without updating docs and tests.
+- Keep config parsing, extraction, aggregation, relation building, and export responsibilities in this directory.
+- If runtime work adds a new cross-directory integration point, update `docs/architecture.md` and this local contract in the same change set.
 
 ## Minimum Verification
 
-- `python -m unittest tests.test_terminology_processor tests.test_terminology_extractors`
-- If controller/UI wiring changes:
-  - `python -m unittest tests.test_ui_terminology_controller`
+- `.\scripts\python.cmd -m unittest tests.test_terminology_processor tests.test_terminology_extractors`
+- If controller or UI wiring changes: `.\scripts\python.cmd -m unittest tests.test_ui_terminology_controller`

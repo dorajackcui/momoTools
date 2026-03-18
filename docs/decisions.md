@@ -1,8 +1,6 @@
 # Decisions
 
-## Current Source of Truth
-
-This directory is the canonical home for active project documentation. Historical notes, snapshots, and superseded docs live under `archive/old_docs/`.
+This document records stable product and engineering decisions that should not drift silently. Structural details live in `docs/architecture.md`, workbook semantics live in `docs/io-contract.md`, and validation commands live in `docs/testing.md`.
 
 ## Stable Design Decisions
 
@@ -53,16 +51,3 @@ This directory is the canonical home for active project documentation. Historica
 - `compound_split` remains parser-compatible but is ignored by the runtime extraction stage.
 - `terms_summary` distinguishes `body` and `suffix` term types.
 - `relations_summary` includes both `cross_file` and `affix_group` style outputs.
-
-## Documentation Rules
-
-- Update the owning doc in the same change set when behavior changes.
-- Prefer one clear source of truth over repeated copies of the same rule.
-- Keep detailed Excel value semantics in `docs/io-contract.md` instead of duplicating them elsewhere.
-- Move uncertain or superseded narrative into `archive/old_docs/` instead of deleting it.
-
-## Known Unclear Areas
-
-- There is no documented release-management process beyond the PyInstaller spec.
-- There is no documented lint or typecheck toolchain beyond syntax compilation.
-- Session-specific runtime notes existed previously, but not all of them represent stable guarantees; they were archived rather than carried forward as canonical docs.

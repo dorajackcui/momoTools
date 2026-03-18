@@ -1,77 +1,95 @@
 # Docs Guide
 
-## Start Here
+This file is the governance entry for the active documentation set. Use it to decide which canonical doc owns a change, which local contract to re-read, and which docs validation to run before finishing a change set.
 
-If you are new to the repo:
+## Documentation Layers
 
-- Read the root `README.md` for install, startup, and high-level risks.
-- Read `docs/architecture.md` to understand layer boundaries and runtime shape.
-- Read `docs/testing.md` before changing code so you know which checks are expected.
+- `README.md`
+  - Human onboarding: install, startup, risk notes, and top-level links
+- Root `AGENTS.md`
+  - Repo-wide agent workflow, global constraints, and default validation entrypoints
+- `docs/*.md`
+  - Canonical global documentation owners for cross-directory behavior and policy
+- Local `AGENTS.md`
+  - Directory contracts that define local routing, invariants, and minimum verification
 
-If you are about to change behavior:
+`docs/README.md` is the only active governance index. Do not spread owner rules across multiple active files.
 
-- Read `docs/io-contract.md` for workbook read/write semantics.
-- Read `docs/decisions.md` for stable mode policies and compatibility constraints.
-- Check whether the relevant subsystem also has a local `AGENTS.md`:
-  - `core/master_update/AGENTS.md`
-  - `core/terminology/AGENTS.md`
-  - `ui/AGENTS.md`
+## Canonical Doc Owners
 
-## By Task
+| Topic | Canonical owner | What belongs there |
+| --- | --- | --- |
+| Cross-repo structure | `docs/architecture.md` | Layering, runtime model, notebook/tool layout, compatibility surfaces, orchestration boundaries |
+| Workbook IO semantics | `docs/io-contract.md` | Normalization, blank handling, row identity, match-column behavior, mode-specific write rules |
+| Validation and commands | `docs/testing.md` | Change-oriented verification matrix, canonical commands, test selection |
+| Environment and workflow | `docs/development.md` | Setup, environment matrix, development workflow, repo-local Python guidance |
+| Packaging and release constraints | `docs/deployment.md` | Packaging expectations, Windows validation, release constraints |
+| Stable product and engineering decisions | `docs/decisions.md` | Durable guarantees that should not silently drift even if implementation moves |
 
-- Understand app structure and allowed dependencies: `docs/architecture.md`
-- Change workbook matching, normalization, blank handling, or write rules: `docs/io-contract.md`
-- Set up an environment or decide what should work without Windows/Excel: `docs/development.md`
-- Pick the right test command for a change: `docs/testing.md`
-- Package or validate a Windows desktop build: `docs/deployment.md`
-- Confirm stable behavioral decisions and known gaps: `docs/decisions.md`
-- Inspect terminology config examples: `docs/sample_terminology_rules.json`
+Local `AGENTS.md` files do not replace these owners. They summarize directory-specific guidance and route changes back to the canonical owner docs.
 
-## Source Of Truth
+## Local Contract Registry
 
-- `docs/architecture.md`
-  - Owns application structure: layering, runtime model, tool-group layout, compatibility boundaries
-  - Describe what exists and where orchestration lives; avoid duplicating detailed workbook rules here
-- `docs/io-contract.md`
-  - Owns workbook behavior: Excel normalization, blank detection, row identity, mode-specific write behavior
-  - This is the only place for concrete IO semantics and pipeline execution behavior that affects results
-- `docs/development.md`
-  - Environment matrix, setup workflow, quick verification defaults
-- `docs/testing.md`
-  - Command selection, environment caveats, change-oriented test matrix
-- `docs/deployment.md`
-  - Packaging constraints and release validation expectations
-- `docs/decisions.md`
-  - Owns stable product and engineering decisions that should not drift silently
-  - Record the durable rule or constraint, then link back to `architecture.md` or `io-contract.md` for implementation/detail when needed
+- `ui/AGENTS.md`
+  - UI presentation-layer contract for views, widgets, and UI-specific routing
+- `core/master_update/AGENTS.md`
+  - Update-master engine contract for row identity, executor routing, and mode-policy sync
+- `core/terminology/AGENTS.md`
+  - Terminology pipeline contract for config/output compatibility and export sync
 
-Avoid restating the same rule in multiple active docs. Link back to the owning doc instead.
+If you add, remove, or relocate a local `AGENTS.md`, update this registry in the same change set.
 
-## Doc Update Rules
+## Change Routing Matrix
 
-- Changing workbook IO semantics:
-  - Update `docs/io-contract.md`
-  - Run `.\scripts\python.cmd scripts/run_regression_suite.py --with-golden`
-- Changing app structure, layer boundaries, or task-runner behavior:
-  - Update `docs/architecture.md`
-- Changing UI composition or orchestration shape without changing workbook results:
-  - Update `docs/architecture.md`
-  - Update `docs/decisions.md` only if the orchestration rule is intended to stay stable
-- Changing environment assumptions, setup steps, or what works without COM:
-  - Update `docs/development.md`
-  - Update `docs/testing.md` if the expected validation path changes
-- Changing validation expectations:
-  - Update `docs/testing.md`
-- Changing packaging or release constraints:
-  - Update `docs/deployment.md`
-- Changing a stable business rule or mode policy:
-  - Update `docs/decisions.md`
+| If you change... | Update canonical doc(s) | Re-read or update local contract |
+| --- | --- | --- |
+| UI composition, notebook layout, view-model shape, UI-controller state flow | `docs/architecture.md` | `ui/AGENTS.md` |
+| Task-runner ownership, compatibility surfaces, or cross-layer orchestration boundaries | `docs/architecture.md` | Nearest local contract when the change lives under a registered directory |
+| Workbook matching, blank handling, write semantics, row identity, match-column behavior | `docs/io-contract.md` | `core/master_update/AGENTS.md` when the work is in update-master internals |
+| Stable business rules or durable mode policies | `docs/decisions.md` | Relevant local contract for the touched subsystem |
+| Terminology config compatibility or durable terminology output guarantees | `docs/decisions.md` | `core/terminology/AGENTS.md` |
+| Terminology export sheet or column semantics that affect downstream workbook expectations | `docs/io-contract.md` | `core/terminology/AGENTS.md` |
+| Validation commands, minimum verification, or change-type test routing | `docs/testing.md` | Relevant local contract when its `Minimum Verification` section changes |
+| Environment assumptions, setup steps, or repo-local Python workflow | `docs/development.md` | None unless a local contract references the changed workflow directly |
+| Packaging or release validation expectations | `docs/deployment.md` | None unless a local contract references the changed workflow directly |
+| Directory-only editing guidance, routing, or minimum verification | Local `AGENTS.md` in that directory | That same local `AGENTS.md` |
+| Docs governance, canonical ownership, or local-contract registration | `docs/README.md` | Any local `AGENTS.md` affected by the governance change |
 
-## Doc Boundaries
+When a change affects both a canonical owner doc and a local contract, update both in the same change set.
 
-- Put structural facts in `architecture.md`: tabs, layers, runtime ownership, compatibility surfaces.
-- Put behavioral contracts in `io-contract.md`: matching, blank handling, overwrite rules, stage execution semantics.
-- Put durable guardrails in `decisions.md`: rules that should not silently drift, even if implementation moves.
-- If a rule needs examples or exact semantics, prefer one owning doc and have the others reference it briefly.
+## Update Workflow
 
-Historical or superseded material belongs in `archive/old_docs/`, not in active docs.
+1. Start from the touched directories, then check whether one of them has a registered local `AGENTS.md`.
+2. Use the matrix above to identify the canonical owner doc before writing or moving documentation.
+3. Update the canonical owner doc first when behavior, structure, or policy changes.
+4. Update the relevant local `AGENTS.md` whenever its routing, local invariants, or minimum verification changes.
+5. Replace repeated rules with a short summary plus an explicit owner reference instead of copying full semantics into multiple files.
+6. Run docs validation before finishing the change set:
+
+```powershell
+.\scripts\python.cmd scripts/check_text_encoding.py --root docs
+.\scripts\python.cmd scripts/check_docs_system.py
+```
+
+## Anti-Duplication Rules
+
+- Keep full semantics in exactly one canonical owner doc.
+- Local `AGENTS.md` files may keep short directory-specific summaries, but every non-obvious invariant must identify its owner with `Owner: local` or `Owner: docs/...`.
+- If a rule is fully owned by a canonical doc, local contracts should point to it instead of re-copying the full rule block.
+- Root `AGENTS.md` may keep global working constraints and default validation entrypoints, but not a second source-of-truth ownership matrix.
+- Move superseded material into `archive/old_docs/` instead of layering contradictory notes into active docs.
+
+## Docs Review Checklist
+
+- The canonical owner doc for each changed behavior, structure, validation rule, or environment rule was updated.
+- Every touched registered directory still has a local `AGENTS.md` that matches the unified template.
+- The `Local Contract Registry` still lists every child `AGENTS.md` and nothing missing from disk.
+- Local `AGENTS.md` files keep summaries short, route detailed semantics back to owner docs, and tag each invariant with `Owner:`.
+- Docs-only verification passes:
+
+```powershell
+.\scripts\python.cmd scripts/check_text_encoding.py --root docs
+.\scripts\python.cmd scripts/check_docs_system.py
+```
+
+- Historical or superseded material was moved to `archive/old_docs/` instead of left active.

@@ -78,6 +78,7 @@ Run the performance baseline report:
 
 ```powershell
 .\scripts\python.cmd scripts/check_text_encoding.py --root docs
+.\scripts\python.cmd scripts/check_docs_system.py
 ```
 
 - COM dependency regression around import safety:
@@ -90,7 +91,7 @@ Run the performance baseline report:
 
 | Change type | Minimum verification |
 | --- | --- |
-| Docs-only | `.\scripts\python.cmd scripts/check_text_encoding.py --root docs` |
+| Docs-only | `.\scripts\python.cmd scripts/check_text_encoding.py --root docs` and `.\scripts\python.cmd scripts/check_docs_system.py` |
 | UI / controller changes | `.\scripts\python.cmd -m unittest discover -s tests -p "test_ui_*.py"` and `.\scripts\python.cmd -m unittest tests.test_ui_controllers tests.test_task_runner` |
 | Folder precheck / processor file-list changes | `.\scripts\python.cmd -m unittest tests.test_ui_controllers tests.test_com_processors tests.test_core_processors_regression` |
 | IO semantics / processor behavior | `.\scripts\python.cmd scripts/run_regression_suite.py --with-golden` |

@@ -4,7 +4,7 @@
 
 | Profile | Expected dependencies | What should work |
 | --- | --- | --- |
-| `Docs-only / static checks` | Python only | Docs edits, encoding checks, repo navigation |
+| `Docs-only / static checks` | Python only | Docs edits, encoding checks, docs-governance checks, repo navigation |
 | `Core non-COM development` | `requirements.txt` installed | App/module imports, UI/controller work, non-COM processor changes, targeted tests |
 | `Full desktop validation on Windows` | `requirements.txt`, `pywin32`, Microsoft Excel, Windows | COM tools, compatibility repair, column tools, post-processing confidence, packaging validation |
 
@@ -59,9 +59,10 @@ Behavior by environment:
 
 1. Start from a small workbook sample before touching production-like files.
 2. Keep UI logic in `ui/`, orchestration in `controller_modules/`, and workbook rules in `core/`.
-3. Update the owning doc in `docs/` when behavior changes.
-4. Preserve compatibility surfaces unless there is an approved migration plan.
-5. Treat `docs/io-contract.md` as the owning doc for Excel value semantics.
+3. Use `docs/README.md` to identify the canonical owner doc and any local contract before changing documentation.
+4. Update the owning doc and any touched local `AGENTS.md` in the same change set when behavior, routing, or verification changes.
+5. Preserve compatibility surfaces unless there is an approved migration plan.
+6. Use `docs/testing.md` as the canonical change-type verification matrix.
 
 ## Quick Checks
 
@@ -69,6 +70,7 @@ Behavior by environment:
 
 ```powershell
 .\scripts\python.cmd scripts/check_text_encoding.py --root docs
+.\scripts\python.cmd scripts/check_docs_system.py
 ```
 
 - App import and smoke-adjacent changes:
@@ -83,16 +85,9 @@ Behavior by environment:
 .\scripts\python.cmd scripts/run_regression_suite.py --with-golden
 ```
 
-## Change-Type Verification Matrix
+## Validation Routing
 
-| Change type | Minimum verification |
-| --- | --- |
-| Docs-only | `.\scripts\python.cmd scripts/check_text_encoding.py --root docs` |
-| UI / controller wiring | `.\scripts\python.cmd -m unittest discover -s tests -p "test_ui_*.py"` and `.\scripts\python.cmd -m unittest tests.test_ui_controllers tests.test_task_runner` |
-| IO semantics / processor behavior | `.\scripts\python.cmd scripts/run_regression_suite.py --with-golden` |
-| Terminology pipeline | `.\scripts\python.cmd -m unittest tests.test_terminology_processor tests.test_terminology_extractors tests.test_ui_terminology_controller` |
-| Update-master behavior | `.\scripts\python.cmd -m unittest tests.test_master_merge_processor tests.test_master_merge_dispatcher tests.test_ui_update_master_views tests.test_ui_merge_masters_view` |
-| Packaging / release work | `.\scripts\python.cmd scripts/run_regression_suite.py --with-golden` and validate from `TM_builder.spec` on Windows |
+`docs/testing.md` is the canonical command matrix for change-type verification. Keep this file focused on environment and workflow, and update `docs/testing.md` instead of duplicating a second full matrix here.
 
 ## Related Docs
 
