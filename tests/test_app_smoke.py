@@ -73,6 +73,7 @@ class AppSmokeTestCase(unittest.TestCase):
         self.assertEqual(kwargs["text"], app.strings.VIEW_LOGS_BUTTON)
         self.assertEqual(kwargs["takefocus"], False)
         view_logs_button.pack.assert_called_once()
+        root.protocol.assert_called_once_with("WM_DELETE_WINDOW", instance._on_root_close)
         root.after.assert_called_once()
         mock_setup_style.assert_called_once()
         mock_init_processors.assert_called_once()
@@ -126,6 +127,7 @@ class AppSmokeTestCase(unittest.TestCase):
         self.assertIsNotNone(instance.untranslated_stats_processor)
         self.assertIsNotNone(instance.terminology_processor)
         self.assertIsInstance(instance.task_runner, app.TkSingleTaskRunner)
+        root.protocol.assert_called_once_with("WM_DELETE_WINDOW", instance._on_root_close)
         mock_setup_style.assert_called_once()
         mock_init_components.assert_called_once()
         root.after.assert_called_once()
@@ -159,6 +161,7 @@ class AppSmokeTestCase(unittest.TestCase):
                 "update_master",
                 "update_master",
                 "update_master",
+                "update_master",
             ],
         )
         self.assertEqual(
@@ -175,6 +178,7 @@ class AppSmokeTestCase(unittest.TestCase):
                 "Merge Masters",
                 "Source Text",
                 "Translation",
+                "Source+Translation",
             ],
         )
         self.assertNotIn("Multi Column", [spec.tab_text for spec in specs])

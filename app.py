@@ -85,7 +85,9 @@ class ExcelUpdaterApp:
             root=self.root,
             set_busy=self._set_processing_busy,
             set_status=self._set_status_text,
+            diagnostic_sink=self._emit_log,
         )
+        self.root.protocol("WM_DELETE_WINDOW", self._on_root_close)
         self.init_components()
         self.root.after(80, self._drain_log_queue)
 
@@ -284,6 +286,10 @@ class ExcelUpdaterApp:
         self._log_queue.put(f"[{timestamp}] {text}")
 
     def _drain_log_queue(self):
+        drain_pending = getattr(getattr(self, "task_runner", None), "drain_pending_completions", None)
+        if callable(drain_pending):
+            drain_pending()
+
         new_lines = []
         while True:
             try:
@@ -301,6 +307,15 @@ class ExcelUpdaterApp:
 
         try:
             self.root.after(80, self._drain_log_queue)
+        except Exception:
+            pass
+
+    def _on_root_close(self):
+        shutdown = getattr(getattr(self, "task_runner", None), "shutdown", None)
+        if callable(shutdown):
+            shutdown()
+        try:
+            self.root.destroy()
         except Exception:
             pass
 

@@ -50,9 +50,11 @@ Not allowed:
 - The app is centered on `ExcelUpdaterApp` in `app.py`.
 - UI work stays on the Tk main thread.
 - Background processing runs through `TkSingleTaskRunner`.
-- Completion callbacks marshal back to the UI with `root.after(...)`.
+- Background workers hand off task completions through a thread-safe queue.
+- The app's main-thread pump drains pending completions, updates task status, and runs UI callbacks.
 - The app enforces a single-task lock; concurrent processing requests are rejected.
 - Cancellation is not currently implemented.
+- If the UI is shutting down, pending task completions are dropped from UI delivery, a diagnostic is logged, and worker threads never fall back to direct Tk calls.
 - File and folder selection prechecks belong to the `controller_modules` + `ui` dialog layer.
 - Shared folder prechecks currently cover content-sync flows, batch job folders, and target-folder writes for `Column Clear/Insert/Delete`, `Compatibility`, and `Deep Replace`.
 - `Deep Replace` source-folder selection remains a plain path selection and does not use target-folder write prechecks.
@@ -84,6 +86,7 @@ The current UI organizes tools into three notebook groups:
 - Processors emit messages through `log_callback`.
 - Structured failures are emitted through `EventLogger`.
 - The application drains log messages into an in-memory bounded buffer.
+- Task-runner orchestration diagnostics are emitted through the app log sink rather than processor event loggers.
 - Status text follows the `Running`, `Done`, and `Failed` task states.
 
 ## Compatibility Surface

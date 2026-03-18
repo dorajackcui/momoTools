@@ -58,6 +58,24 @@ class AppLogConsoleTestCase(unittest.TestCase):
         self.assertTrue(instance.status_var.set.called)
         instance.root.after.assert_called_once()
 
+    def test_drain_log_queue_drains_task_runner_before_processing_logs(self):
+        instance = self._make_app_stub()
+        instance.task_runner = MagicMock()
+        instance._emit_log("queued-before-drain")
+
+        def drain_runner():
+            instance._emit_log("queued-by-runner-drain")
+
+        instance.task_runner.drain_pending_completions.side_effect = drain_runner
+
+        instance._drain_log_queue()
+
+        self.assertEqual(len(instance._log_buffer), 2)
+        self.assertTrue(instance._log_buffer[0].endswith("queued-before-drain"))
+        self.assertTrue(instance._log_buffer[1].endswith("queued-by-runner-drain"))
+        instance.task_runner.drain_pending_completions.assert_called_once_with()
+        instance.root.after.assert_called_once()
+
     def test_open_log_window_replays_history_and_receives_incremental_logs(self):
         instance = self._make_app_stub()
         instance._log_buffer.extend(["[10:00:00] A", "[10:00:01] B"])
@@ -99,6 +117,15 @@ class AppLogConsoleTestCase(unittest.TestCase):
         instance._drain_log_queue()
         latest_status = instance.status_var.set.call_args_list[-1].args[0]
         self.assertTrue(latest_status.endswith("ready-detail"))
+
+    def test_root_close_shuts_down_task_runner_before_destroy(self):
+        instance = self._make_app_stub()
+        instance.task_runner = MagicMock()
+
+        instance._on_root_close()
+
+        instance.task_runner.shutdown.assert_called_once_with()
+        instance.root.destroy.assert_called_once_with()
 
 
 if __name__ == "__main__":
