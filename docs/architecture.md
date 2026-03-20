@@ -8,9 +8,15 @@
 
 - `app.py`
   - Creates the Tk root window
-  - Initializes processors
-  - Builds notebook groups and tool tabs
-  - Owns status and log-window wiring
+  - Owns the application shell, task runner, status row, and log-window wiring
+  - Delegates processor construction to `app_shell/services.py`
+  - Delegates notebook-group and tool-tab assembly to `app_shell/registry.py`
+- `app_shell/registry.py`
+  - Declares notebook groups and tool registration for the desktop shell
+  - Keeps controller/frame pairing, shared processor binding, and mount hooks explicit
+- `app_shell/services.py`
+  - Builds the shared processor bundle used by the application shell
+  - Centralizes log-sink wiring for processors that emit diagnostics
 - `ui/`
   - Views under `ui/views/`
   - Shared widgets under `ui/widgets/`
@@ -44,10 +50,12 @@ Not allowed:
 - `core` importing from `ui` or `controller_modules`
 - `ui` calling processors directly
 - New feature logic living only in `controllers.py`
+- New tool registration logic growing back into `app.py`
 
 ## Runtime Model
 
 - The app is centered on `ExcelUpdaterApp` in `app.py`.
+- `app.py` remains the stable entrypoint, but tool extension goes through the registry rather than hand-editing controller/frame lists in the shell.
 - UI work stays on the Tk main thread.
 - Background processing runs through `TkSingleTaskRunner`.
 - Background workers hand off task completions through a thread-safe queue.
@@ -81,12 +89,15 @@ The current UI organizes tools into three notebook groups:
   - `Source+Translation`
     - pipeline tab for running the two update flows in sequence
 
+Tool additions and notebook layout changes should update `app_shell/registry.py` and keep these group titles and tab order aligned with the registry.
+
 ## Observability
 
 - Processors emit messages through `log_callback`.
 - Structured failures are emitted through `EventLogger`.
+- Save failures in target-write flows retain the original exception plus write-stage context in the processor error event.
 - The application drains log messages into an in-memory bounded buffer.
-- Task-runner orchestration diagnostics are emitted through the app log sink rather than processor event loggers.
+- Task-runner and app-shell diagnostics are emitted through the app log sink rather than processor event loggers.
 - Status text follows the `Running`, `Done`, and `Failed` task states.
 
 ## Compatibility Surface

@@ -1,52 +1,16 @@
 import collections
-from dataclasses import dataclass
 import queue
 import time
 import tkinter as tk
 from tkinter import ttk
-from typing import Callable, Optional
+from typing import Optional
 
+from app_shell import registry as app_registry
 from ui import strings
-from controllers import (
-    BatchController,
-    ClearerController,
-    CompatibilityController,
-    DeepReplaceController,
-    MasterMergeController,
-    ReverseUpdaterController,
-    SourceTranslationPipelineController,
-    TerminologyExtractorController,
-    UpdateContentController,
-    UpdateMasterController,
-    UntranslatedStatsController,
-    UpdaterController,
-)
+from app_shell.services import build_processors
 from controller_modules.task_runner import TkSingleTaskRunner
 from ui.theme import APP_BG, configure_ttk_style
 from ui.widgets.log_window import LogWindow
-from ui.views import (
-    BatchFrame,
-    ClearerFrame,
-    CompatibilityFrame,
-    DeepReplaceFrame,
-    MergeMastersFrame,
-    ReverseUpdaterFrame,
-    SourceTranslationPipelineFrame,
-    TerminologyExtractorFrame,
-    UntranslatedStatsFrame,
-    UpdateContentFrame,
-    UpdateMasterFrame,
-    UpdaterFrame,
-)
-
-
-@dataclass(frozen=True)
-class ToolSpec:
-    group: str
-    tab_text: str
-    controller_factory: Callable[["ExcelUpdaterApp"], object]
-    frame_cls: type
-    after_mount: Optional[Callable[[object], None]] = None
 
 
 class ExcelUpdaterApp:
@@ -66,6 +30,8 @@ class ExcelUpdaterApp:
         self._log_queue = queue.Queue()
         self._log_buffer = collections.deque(maxlen=2000)
         self._log_window = None
+        self._closing = False
+        self._app_diagnostic_once_keys = set()
 
         self.status_var = tk.StringVar(value="Ready")
         self.status_row = ttk.Frame(self.root, style="App.TFrame")
@@ -95,168 +61,37 @@ class ExcelUpdaterApp:
         configure_ttk_style()
 
     def init_processors(self):
-        from core.deep_replace_processor import DeepReplaceProcessor
-        from core.excel_cleaner import ExcelColumnClearer
-        from core.excel_compatibility_processor import ExcelCompatibilityProcessor
-        from core.excel_processor import ExcelProcessor
-        from core.master_merge_processor import MasterMergeProcessor
-        from core.multi_column_processor import MultiColumnExcelProcessor
-        from core.reverse_excel_processor import ReverseExcelProcessor
-        from core.terminology import TerminologyProcessor
-        from core.untranslated_stats_processor import UntranslatedStatsProcessor
-
-        self.excel_processor = ExcelProcessor(self._emit_log)
-        self.clearer = ExcelColumnClearer()
-        self.clearer.set_log_callback(self._emit_log)
-        self.compatibility_processor = ExcelCompatibilityProcessor()
-        self.compatibility_processor.set_log_callback(self._emit_log)
-        self.multi_processor = MultiColumnExcelProcessor(self._emit_log)
-        self.deep_replace_processor = DeepReplaceProcessor(self._emit_log)
-        self.reverse_excel_processor = ReverseExcelProcessor(self._emit_log)
-        self.master_merge_processor = MasterMergeProcessor(self._emit_log)
-        self.untranslated_stats_processor = UntranslatedStatsProcessor(self._emit_log)
-        self.terminology_processor = TerminologyProcessor(self._emit_log)
+        bundle = build_processors(self._emit_log)
+        for attr_name, value in vars(bundle).items():
+            setattr(self, attr_name, value)
 
     def _build_tool_specs(self):
-        return [
-            ToolSpec(
-                group="main",
-                tab_text="Master->Target",
-                controller_factory=lambda app: UpdaterController(
-                    None, app.excel_processor, app.multi_processor, task_runner=app.task_runner
-                ),
-                frame_cls=UpdaterFrame,
-            ),
-            ToolSpec(
-                group="main",
-                tab_text="Target->Master",
-                controller_factory=lambda app: ReverseUpdaterController(
-                    None, app.reverse_excel_processor, task_runner=app.task_runner
-                ),
-                frame_cls=ReverseUpdaterFrame,
-            ),
-            ToolSpec(
-                group="main",
-                tab_text="Batch",
-                controller_factory=lambda app: BatchController(
-                    None,
-                    app.excel_processor,
-                    app.reverse_excel_processor,
-                    task_runner=app.task_runner,
-                ),
-                frame_cls=BatchFrame,
-                after_mount=lambda controller: controller.restore_persisted_paths(),
-            ),
-            ToolSpec(
-                group="utilities",
-                tab_text="Column Clear",
-                controller_factory=lambda app: ClearerController(
-                    None,
-                    app.clearer,
-                    task_runner=app.task_runner,
-                ),
-                frame_cls=ClearerFrame,
-            ),
-            ToolSpec(
-                group="utilities",
-                tab_text="Compatibility",
-                controller_factory=lambda app: CompatibilityController(
-                    None, app.compatibility_processor, task_runner=app.task_runner
-                ),
-                frame_cls=CompatibilityFrame,
-            ),
-            ToolSpec(
-                group="utilities",
-                tab_text="Deep Replace",
-                controller_factory=lambda app: DeepReplaceController(
-                    None, app.deep_replace_processor, task_runner=app.task_runner
-                ),
-                frame_cls=DeepReplaceFrame,
-            ),
-            ToolSpec(
-                group="utilities",
-                tab_text="Untranslated Stats",
-                controller_factory=lambda app: UntranslatedStatsController(
-                    None, app.untranslated_stats_processor, task_runner=app.task_runner
-                ),
-                frame_cls=UntranslatedStatsFrame,
-            ),
-            ToolSpec(
-                group="utilities",
-                tab_text="Term Extractor",
-                controller_factory=lambda app: TerminologyExtractorController(
-                    None, app.terminology_processor, task_runner=app.task_runner
-                ),
-                frame_cls=TerminologyExtractorFrame,
-                after_mount=lambda controller: controller.restore_persisted_paths(),
-            ),
-            ToolSpec(
-                group="update_master",
-                tab_text="Merge Masters",
-                controller_factory=lambda app: MasterMergeController(
-                    None,
-                    app.master_merge_processor,
-                    task_runner=app.task_runner,
-                ),
-                frame_cls=MergeMastersFrame,
-            ),
-            ToolSpec(
-                group="update_master",
-                tab_text="Source Text",
-                controller_factory=lambda app: UpdateMasterController(
-                    None,
-                    app.master_merge_processor,
-                    task_runner=app.task_runner,
-                ),
-                frame_cls=UpdateMasterFrame,
-            ),
-            ToolSpec(
-                group="update_master",
-                tab_text="Translation",
-                controller_factory=lambda app: UpdateContentController(
-                    None,
-                    app.master_merge_processor,
-                    task_runner=app.task_runner,
-                ),
-                frame_cls=UpdateContentFrame,
-            ),
-            ToolSpec(
-                group="update_master",
-                tab_text="Source+Translation",
-                controller_factory=lambda app: SourceTranslationPipelineController(
-                    None,
-                    app.master_merge_processor,
-                    task_runner=app.task_runner,
-                ),
-                frame_cls=SourceTranslationPipelineFrame,
-            ),
-        ]
+        return list(app_registry.build_tool_specs())
 
     def init_components(self):
-        top_group_frames = {
-            "main": ttk.Frame(self.notebook),
-            "utilities": ttk.Frame(self.notebook),
-            "update_master": ttk.Frame(self.notebook),
-        }
-        self.notebook.add(top_group_frames["main"], text="Content Sync")
-        self.notebook.add(top_group_frames["utilities"], text="Utilities")
-        self.notebook.add(top_group_frames["update_master"], text="Master Update")
+        group_specs = app_registry.build_tool_groups()
+        top_group_frames = {}
+        for group_spec in group_specs:
+            group_frame = ttk.Frame(self.notebook)
+            top_group_frames[group_spec.key] = group_frame
+            self.notebook.add(group_frame, text=group_spec.title)
 
-        group_notebooks = {
-            "main": ttk.Notebook(top_group_frames["main"], takefocus=False),
-            "utilities": ttk.Notebook(top_group_frames["utilities"], takefocus=False),
-            "update_master": ttk.Notebook(top_group_frames["update_master"], takefocus=False),
-        }
+        group_notebooks = {}
+        for group_spec in group_specs:
+            group_notebook = ttk.Notebook(top_group_frames[group_spec.key], takefocus=False)
+            group_notebooks[group_spec.key] = group_notebook
+
         for notebook in group_notebooks.values():
             notebook.pack(expand=True, fill="both", padx=6, pady=6)
 
         for spec in self._build_tool_specs():
             notebook = group_notebooks[spec.group]
-            controller = spec.controller_factory(self)
+            processor_args = [getattr(self, attr_name) for attr_name in spec.processor_attrs]
+            controller = spec.controller_cls(None, *processor_args, task_runner=self.task_runner)
             frame = spec.frame_cls(notebook, controller)
             controller.frame = frame
-            if spec.after_mount is not None:
-                spec.after_mount(controller)
+            for hook_name in spec.after_mount_hooks:
+                getattr(controller, hook_name)()
             notebook.add(frame, text=spec.tab_text)
 
     def _set_status_text(self, text: str):
@@ -285,11 +120,23 @@ class ExcelUpdaterApp:
         timestamp = time.strftime("%H:%M:%S")
         self._log_queue.put(f"[{timestamp}] {text}")
 
-    def _drain_log_queue(self):
-        drain_pending = getattr(getattr(self, "task_runner", None), "drain_pending_completions", None)
-        if callable(drain_pending):
-            drain_pending()
+    def _emit_app_diagnostic(self, code: str, detail: str, exc: Optional[BaseException] = None, *, dedupe_key=None):
+        once_keys = getattr(self, "_app_diagnostic_once_keys", None)
+        if once_keys is None:
+            once_keys = set()
+            self._app_diagnostic_once_keys = once_keys
 
+        key = code if dedupe_key is None else dedupe_key
+        if key in once_keys:
+            return
+        once_keys.add(key)
+
+        message = f"{code}: {detail}"
+        if exc is not None:
+            message = f"{message} - {type(exc).__name__}: {exc}"
+        self._emit_log(message)
+
+    def _flush_log_queue(self):
         new_lines = []
         while True:
             try:
@@ -305,12 +152,27 @@ class ExcelUpdaterApp:
             if self._log_window is not None and self._log_window.is_alive():
                 self._log_window.append_lines(new_lines)
 
+    def _drain_log_queue(self):
+        drain_pending = getattr(getattr(self, "task_runner", None), "drain_pending_completions", None)
+        if callable(drain_pending):
+            drain_pending()
+
+        self._flush_log_queue()
+
         try:
             self.root.after(80, self._drain_log_queue)
-        except Exception:
-            pass
+        except Exception as exc:
+            if getattr(self, "_closing", False):
+                return
+            self._emit_app_diagnostic(
+                "APP_LOG_PUMP_SCHEDULE_FAILED",
+                "Unable to schedule the next log queue drain",
+                exc=exc,
+            )
+            self._flush_log_queue()
 
     def _on_root_close(self):
+        self._closing = True
         shutdown = getattr(getattr(self, "task_runner", None), "shutdown", None)
         if callable(shutdown):
             shutdown()
@@ -341,18 +203,34 @@ class ExcelUpdaterApp:
         for widget in self._iter_descendants(self.root):
             if not getattr(widget, "_processing_action", False):
                 continue
+            configure_error = None
             try:
                 widget.configure(state=target_state)
                 continue
-            except Exception:
-                pass
+            except Exception as exc:
+                configure_error = exc
+            state_error = None
             try:
                 if is_busy:
                     widget.state(["disabled"])
                 else:
                     widget.state(["!disabled"])
-            except Exception:
-                pass
+            except Exception as exc:
+                state_error = exc
+
+            if configure_error is not None and state_error is not None:
+                widget_name = type(widget).__name__
+                detail = (
+                    f"widget={widget_name}, target_state={target_state}, "
+                    f"configure_error={type(configure_error).__name__}, "
+                    f"state_error={type(state_error).__name__}"
+                )
+                self._emit_app_diagnostic(
+                    "APP_WIDGET_BUSY_STATE_FAILED",
+                    detail,
+                    exc=state_error,
+                    dedupe_key=("APP_WIDGET_BUSY_STATE_FAILED", widget_name, target_state),
+                )
 
     def _iter_descendants(self, root_widget):
         for child in root_widget.winfo_children():

@@ -8,7 +8,6 @@ from core.kernel import (
     EventLogger,
     ModeIOContract,
     ProcessingStats,
-    apply_cell_updates,
     build_combined_key,
     get_stable_workers_cap,
     is_blank_value,
@@ -16,6 +15,7 @@ from core.kernel import (
     open_workbook,
     safe_to_str,
 )
+from core.kernel.excel_io import apply_cell_updates_detailed
 from core.pipeline import process_files_in_parallel, run_excel_com_post_process
 
 
@@ -245,14 +245,23 @@ class ExcelProcessor:
             )
             return 0
 
-        if updates and not apply_cell_updates(file_path, updates):
-            self.stats.files_failed += 1
-            self._log_error(
-                "E_TARGET_SAVE",
-                "写回目标文件失败",
-                file_path=file_path,
-            )
-            return 0
+        if updates:
+            update_result = apply_cell_updates_detailed(file_path, updates)
+            if not update_result.ok:
+                self.stats.files_failed += 1
+                self._log_error(
+                    "E_TARGET_SAVE",
+                    "写回目标文件失败",
+                    file_path=file_path,
+                    exc=update_result.exception,
+                    context={
+                        "stage": update_result.stage,
+                        "update_count": update_result.update_count,
+                        "sample_row": update_result.sample_row,
+                        "sample_col": update_result.sample_col,
+                    },
+                )
+                return 0
 
         self.stats.files_succeeded += 1
         self.stats.cells_updated += updated

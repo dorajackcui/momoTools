@@ -16,7 +16,7 @@
   2. 为 `_dispatch_to_ui` 增加可观测性（错误日志 + telemetry code）。
   3. 增加专门单测覆盖 `after` 抛错路径。
 
-## 2) P1 — 关键 IO 失败原因被吞掉，导致定位困难
+## (Closed) 2) P1 — 关键 IO 失败原因被吞掉，导致定位困难
 
 - **问题位置**
   - `core/kernel/excel_io.py::apply_cell_updates` 捕获 `Exception` 后仅返回 `False`。
@@ -30,7 +30,7 @@
   2. UI 层避免裸 `pass`，至少记录 debug/error 日志。
   3. 将错误码与上下文统一汇总到 `EventLogger`。
 
-## 3) P2 — 应用装配集中在 `app.py`，扩展新工具的改动面偏大
+## (Closed) 3) P2 — 应用装配集中在 `app.py`，扩展新工具的改动面偏大
 
 - **问题位置**
   - `app.py` 顶部集中导入全部 controller/view，`_build_tool_specs` 手工维护长列表。

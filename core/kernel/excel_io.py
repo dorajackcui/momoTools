@@ -1,12 +1,23 @@
 import concurrent.futures
 import os
 from contextlib import contextmanager
+from dataclasses import dataclass
 from typing import Any, Callable, Dict, Iterable, Iterator, List, Optional, Sequence, Tuple
 
 import openpyxl
 
 
 DEFAULT_EXCEL_EXTENSIONS = (".xlsx", ".xls")
+
+
+@dataclass(frozen=True)
+class CellUpdateResult:
+    ok: bool
+    stage: Optional[str]
+    exception: Optional[BaseException]
+    update_count: int
+    sample_row: Optional[int]
+    sample_col: Optional[int]
 
 
 def get_stable_workers_cap() -> int:
@@ -81,23 +92,81 @@ def open_workbook(
             workbook.close()
 
 
-def apply_cell_updates(file_path: str, updates: Dict[Tuple[int, int], Any]) -> bool:
+def apply_cell_updates_detailed(
+    file_path: str,
+    updates: Dict[Tuple[int, int], Any],
+) -> CellUpdateResult:
+    sample_row = None
+    sample_col = None
+    if updates:
+        sample_row, sample_col = next(iter(updates))
+
     if not updates:
-        return True
+        return CellUpdateResult(
+            ok=True,
+            stage=None,
+            exception=None,
+            update_count=0,
+            sample_row=sample_row,
+            sample_col=sample_col,
+        )
 
     workbook = None
+    update_count = len(updates)
     try:
-        workbook = openpyxl.load_workbook(file_path)
+        try:
+            workbook = openpyxl.load_workbook(file_path)
+        except Exception as exc:
+            return CellUpdateResult(
+                ok=False,
+                stage="load",
+                exception=exc,
+                update_count=update_count,
+                sample_row=sample_row,
+                sample_col=sample_col,
+            )
+
         worksheet = workbook.active
         for (row_idx, col_idx), value in updates.items():
-            worksheet.cell(row=row_idx, column=col_idx).value = value
-        workbook.save(file_path)
-        return True
-    except Exception:
-        return False
+            try:
+                worksheet.cell(row=row_idx, column=col_idx).value = value
+            except Exception as exc:
+                return CellUpdateResult(
+                    ok=False,
+                    stage="write",
+                    exception=exc,
+                    update_count=update_count,
+                    sample_row=sample_row,
+                    sample_col=sample_col,
+                )
+
+        try:
+            workbook.save(file_path)
+        except Exception as exc:
+            return CellUpdateResult(
+                ok=False,
+                stage="save",
+                exception=exc,
+                update_count=update_count,
+                sample_row=sample_row,
+                sample_col=sample_col,
+            )
+
+        return CellUpdateResult(
+            ok=True,
+            stage=None,
+            exception=None,
+            update_count=update_count,
+            sample_row=sample_row,
+            sample_col=sample_col,
+        )
     finally:
         if workbook is not None:
             workbook.close()
+
+
+def apply_cell_updates(file_path: str, updates: Dict[Tuple[int, int], Any]) -> bool:
+    return apply_cell_updates_detailed(file_path, updates).ok
 
 
 def run_parallel_map(

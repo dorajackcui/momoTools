@@ -198,40 +198,44 @@ class AppComponentRegistryTestCase(unittest.TestCase):
                     side_effect=[main_notebook, utilities_notebook, update_master_notebook],
                 )
             )
-            stack.enter_context(patch("app.UpdaterController", RecordingUpdaterController))
-            stack.enter_context(patch("app.ReverseUpdaterController", RecordingReverseController))
-            stack.enter_context(patch("app.BatchController", RecordingBatchController))
-            stack.enter_context(patch("app.BatchFrame", RecordingBatchFrame))
-            stack.enter_context(patch("app.ClearerController", RecordingClearerController))
-            stack.enter_context(patch("app.CompatibilityController", RecordingCompatibilityController))
-            stack.enter_context(patch("app.DeepReplaceController", RecordingDeepReplaceController))
-            stack.enter_context(patch("app.MasterMergeController", RecordingMasterMergeController))
-            stack.enter_context(patch("app.UpdateMasterController", RecordingUpdateMasterController))
-            stack.enter_context(patch("app.UpdateContentController", RecordingUpdateContentController))
+            stack.enter_context(patch("app.app_registry.UpdaterController", RecordingUpdaterController))
+            stack.enter_context(patch("app.app_registry.ReverseUpdaterController", RecordingReverseController))
+            stack.enter_context(patch("app.app_registry.BatchController", RecordingBatchController))
+            stack.enter_context(patch("app.app_registry.BatchFrame", RecordingBatchFrame))
+            stack.enter_context(patch("app.app_registry.ClearerController", RecordingClearerController))
+            stack.enter_context(
+                patch("app.app_registry.CompatibilityController", RecordingCompatibilityController)
+            )
+            stack.enter_context(patch("app.app_registry.DeepReplaceController", RecordingDeepReplaceController))
+            stack.enter_context(patch("app.app_registry.MasterMergeController", RecordingMasterMergeController))
+            stack.enter_context(patch("app.app_registry.UpdateMasterController", RecordingUpdateMasterController))
+            stack.enter_context(patch("app.app_registry.UpdateContentController", RecordingUpdateContentController))
             stack.enter_context(
                 patch(
-                    "app.SourceTranslationPipelineController",
+                    "app.app_registry.SourceTranslationPipelineController",
                     RecordingSourceTranslationPipelineController,
                 )
             )
-            stack.enter_context(patch("app.UntranslatedStatsController", RecordingStatsController))
-            stack.enter_context(patch("app.TerminologyExtractorController", RecordingTerminologyController))
-            stack.enter_context(patch("app.UpdaterFrame", RecordingUpdaterFrame))
-            stack.enter_context(patch("app.ReverseUpdaterFrame", RecordingReverseFrame))
-            stack.enter_context(patch("app.ClearerFrame", RecordingClearerFrame))
-            stack.enter_context(patch("app.CompatibilityFrame", RecordingCompatibilityFrame))
-            stack.enter_context(patch("app.DeepReplaceFrame", RecordingDeepReplaceFrame))
-            stack.enter_context(patch("app.MergeMastersFrame", RecordingMasterMergeFrame))
-            stack.enter_context(patch("app.UpdateMasterFrame", RecordingUpdateMasterFrame))
-            stack.enter_context(patch("app.UpdateContentFrame", RecordingUpdateContentFrame))
+            stack.enter_context(patch("app.app_registry.UntranslatedStatsController", RecordingStatsController))
+            stack.enter_context(
+                patch("app.app_registry.TerminologyExtractorController", RecordingTerminologyController)
+            )
+            stack.enter_context(patch("app.app_registry.UpdaterFrame", RecordingUpdaterFrame))
+            stack.enter_context(patch("app.app_registry.ReverseUpdaterFrame", RecordingReverseFrame))
+            stack.enter_context(patch("app.app_registry.ClearerFrame", RecordingClearerFrame))
+            stack.enter_context(patch("app.app_registry.CompatibilityFrame", RecordingCompatibilityFrame))
+            stack.enter_context(patch("app.app_registry.DeepReplaceFrame", RecordingDeepReplaceFrame))
+            stack.enter_context(patch("app.app_registry.MergeMastersFrame", RecordingMasterMergeFrame))
+            stack.enter_context(patch("app.app_registry.UpdateMasterFrame", RecordingUpdateMasterFrame))
+            stack.enter_context(patch("app.app_registry.UpdateContentFrame", RecordingUpdateContentFrame))
             stack.enter_context(
                 patch(
-                    "app.SourceTranslationPipelineFrame",
+                    "app.app_registry.SourceTranslationPipelineFrame",
                     RecordingSourceTranslationPipelineFrame,
                 )
             )
-            stack.enter_context(patch("app.UntranslatedStatsFrame", RecordingStatsFrame))
-            stack.enter_context(patch("app.TerminologyExtractorFrame", RecordingTerminologyFrame))
+            stack.enter_context(patch("app.app_registry.UntranslatedStatsFrame", RecordingStatsFrame))
+            stack.enter_context(patch("app.app_registry.TerminologyExtractorFrame", RecordingTerminologyFrame))
             instance.init_components()
 
         self.assertEqual(

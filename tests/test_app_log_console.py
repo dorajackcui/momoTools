@@ -29,6 +29,16 @@ class FakeLogWindow:
         return self.alive
 
 
+class BrokenBusyWidget:
+    _processing_action = True
+
+    def configure(self, **_kwargs):
+        raise RuntimeError("configure-boom")
+
+    def state(self, _value):
+        raise RuntimeError("state-boom")
+
+
 class AppLogConsoleTestCase(unittest.TestCase):
     def _make_app_stub(self):
         instance = app.ExcelUpdaterApp.__new__(app.ExcelUpdaterApp)
@@ -39,6 +49,8 @@ class AppLogConsoleTestCase(unittest.TestCase):
         instance._log_queue = queue.Queue()
         instance._log_buffer = collections.deque(maxlen=2000)
         instance._log_window = None
+        instance._closing = False
+        instance._app_diagnostic_once_keys = set()
         return instance
 
     def test_emit_log_is_thread_safe_and_drain_updates_buffer(self):
@@ -124,8 +136,42 @@ class AppLogConsoleTestCase(unittest.TestCase):
 
         instance._on_root_close()
 
+        self.assertTrue(instance._closing)
         instance.task_runner.shutdown.assert_called_once_with()
         instance.root.destroy.assert_called_once_with()
+
+    def test_drain_log_queue_logs_schedule_failure_once_when_not_closing(self):
+        instance = self._make_app_stub()
+        instance.root.after.side_effect = RuntimeError("after-boom")
+
+        instance._drain_log_queue()
+        instance._drain_log_queue()
+
+        matching = [line for line in instance._log_buffer if "APP_LOG_PUMP_SCHEDULE_FAILED" in line]
+        self.assertEqual(len(matching), 1)
+        self.assertIn("RuntimeError", matching[0])
+
+    def test_drain_log_queue_ignores_schedule_failure_while_closing(self):
+        instance = self._make_app_stub()
+        instance._closing = True
+        instance.root.after.side_effect = RuntimeError("after-boom")
+
+        instance._drain_log_queue()
+
+        self.assertFalse(any("APP_LOG_PUMP_SCHEDULE_FAILED" in line for line in instance._log_buffer))
+
+    def test_set_processing_busy_logs_widget_diagnostic_when_all_state_paths_fail(self):
+        instance = self._make_app_stub()
+        instance._iter_descendants = MagicMock(return_value=iter([BrokenBusyWidget()]))
+
+        instance._set_processing_busy(True)
+        instance._drain_log_queue()
+
+        matching = [line for line in instance._log_buffer if "APP_WIDGET_BUSY_STATE_FAILED" in line]
+        self.assertEqual(len(matching), 1)
+        self.assertIn("BrokenBusyWidget", matching[0])
+        self.assertIn("target_state=disabled", matching[0])
+        self.assertIn("RuntimeError", matching[0])
 
 
 if __name__ == "__main__":

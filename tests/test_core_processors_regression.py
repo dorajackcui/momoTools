@@ -40,6 +40,38 @@ class CoreProcessorsRegressionTestCase(unittest.TestCase):
     def tearDown(self):
         self.temp_dir.cleanup()
 
+    @staticmethod
+    def _load_workbook_with_save_failure(real_loader, blocked_paths):
+        normalized = {str(Path(path)) for path in blocked_paths}
+
+        def loader(filename, *args, **kwargs):
+            workbook = real_loader(filename, *args, **kwargs)
+            if kwargs.get("read_only"):
+                return workbook
+            if str(Path(filename)) not in normalized:
+                return workbook
+
+            def broken_save(*_args, **_kwargs):
+                raise PermissionError("locked file")
+
+            workbook.save = broken_save
+            return workbook
+
+        return loader
+
+    @staticmethod
+    def _load_workbook_with_write_load_failure(real_loader, blocked_paths):
+        normalized = {str(Path(path)) for path in blocked_paths}
+
+        def loader(filename, *args, **kwargs):
+            if kwargs.get("read_only"):
+                return real_loader(filename, *args, **kwargs)
+            if str(Path(filename)) in normalized:
+                raise PermissionError("write-open denied")
+            return real_loader(filename, *args, **kwargs)
+
+        return loader
+
     def test_single_update_overwrite_and_fill_blank_only(self):
         master_path = self.root / "master.xlsx"
         target_folder = self.root / "targets_single"
@@ -233,6 +265,146 @@ class CoreProcessorsRegressionTestCase(unittest.TestCase):
         self.assertEqual(updated_count, 1)
         self.assertTrue(is_blank_value(read_cell(target_path, 2, 3)))
 
+    def test_single_update_records_save_failure_context(self):
+        master_path = self.root / "master_save_error.xlsx"
+        target_folder = self.root / "targets_save_error"
+        target_folder.mkdir()
+        target_path = target_folder / "target.xlsx"
+
+        write_workbook(
+            master_path,
+            [
+                ["id", "key", "match", "value"],
+                ["", "K1", "M1", "V1"],
+            ],
+        )
+        write_workbook(
+            target_path,
+            [
+                ["key", "match", "translation"],
+                ["K1", "M1", ""],
+            ],
+        )
+
+        processor = ExcelProcessor(log_callback=lambda _msg: None)
+        processor.set_master_file(str(master_path))
+        processor.set_target_folder(str(target_folder))
+        processor.set_post_process_enabled(False)
+
+        real_loader = openpyxl.load_workbook
+        with (
+            patch("core.excel_processor.get_stable_workers_cap", return_value=1),
+            patch(
+                "core.kernel.excel_io.openpyxl.load_workbook",
+                side_effect=self._load_workbook_with_save_failure(real_loader, [target_path]),
+            ),
+        ):
+            updated_count = processor.process_files()
+
+        self.assertEqual(updated_count, 0)
+        self.assertEqual(processor.stats.files_failed, 1)
+        self.assertEqual(processor.stats.files_succeeded, 0)
+        self.assertEqual(len(processor.stats.errors), 1)
+        error = processor.stats.errors[0]
+        self.assertEqual(error.code, "E_TARGET_SAVE")
+        self.assertIsInstance(error.exception, PermissionError)
+        self.assertEqual(error.context["stage"], "save")
+        self.assertEqual(error.context["update_count"], 1)
+        self.assertEqual(error.context["sample_row"], 2)
+        self.assertEqual(error.context["sample_col"], 3)
+
+    def test_single_update_records_load_failure_context(self):
+        master_path = self.root / "master_load_error.xlsx"
+        target_folder = self.root / "targets_load_error"
+        target_folder.mkdir()
+        target_path = target_folder / "target.xlsx"
+
+        write_workbook(
+            master_path,
+            [
+                ["id", "key", "match", "value"],
+                ["", "K1", "M1", "V1"],
+            ],
+        )
+        write_workbook(
+            target_path,
+            [
+                ["key", "match", "translation"],
+                ["K1", "M1", ""],
+            ],
+        )
+
+        processor = ExcelProcessor(log_callback=lambda _msg: None)
+        processor.set_master_file(str(master_path))
+        processor.set_target_folder(str(target_folder))
+        processor.set_post_process_enabled(False)
+
+        real_loader = openpyxl.load_workbook
+        with (
+            patch("core.excel_processor.get_stable_workers_cap", return_value=1),
+            patch(
+                "core.kernel.excel_io.openpyxl.load_workbook",
+                side_effect=self._load_workbook_with_write_load_failure(real_loader, [target_path]),
+            ),
+        ):
+            updated_count = processor.process_files()
+
+        self.assertEqual(updated_count, 0)
+        self.assertEqual(processor.stats.files_failed, 1)
+        self.assertEqual(processor.stats.files_succeeded, 0)
+        self.assertEqual(len(processor.stats.errors), 1)
+        error = processor.stats.errors[0]
+        self.assertEqual(error.code, "E_TARGET_SAVE")
+        self.assertIsInstance(error.exception, PermissionError)
+        self.assertEqual(error.context["stage"], "load")
+        self.assertEqual(error.context["update_count"], 1)
+        self.assertEqual(error.context["sample_row"], 2)
+        self.assertEqual(error.context["sample_col"], 3)
+
+    def test_single_update_continues_after_one_file_save_failure(self):
+        master_path = self.root / "master_partial_save_error.xlsx"
+        target_folder = self.root / "targets_partial_save_error"
+        target_folder.mkdir()
+        good_target = target_folder / "good.xlsx"
+        bad_target = target_folder / "bad.xlsx"
+
+        write_workbook(
+            master_path,
+            [
+                ["id", "key", "match", "value"],
+                ["", "K1", "M1", "V1"],
+            ],
+        )
+        target_rows = [
+            ["key", "match", "translation"],
+            ["K1", "M1", ""],
+        ]
+        write_workbook(good_target, target_rows)
+        write_workbook(bad_target, target_rows)
+
+        processor = ExcelProcessor(log_callback=lambda _msg: None)
+        processor.set_master_file(str(master_path))
+        processor.set_target_folder(str(target_folder))
+        processor.set_post_process_enabled(False)
+
+        real_loader = openpyxl.load_workbook
+        with (
+            patch("core.excel_processor.get_stable_workers_cap", return_value=1),
+            patch(
+                "core.kernel.excel_io.openpyxl.load_workbook",
+                side_effect=self._load_workbook_with_save_failure(real_loader, [bad_target]),
+            ),
+        ):
+            updated_count = processor.process_files()
+
+        self.assertEqual(updated_count, 1)
+        self.assertEqual(read_cell(good_target, 2, 3), "V1")
+        self.assertEqual(read_cell(bad_target, 2, 3), None)
+        self.assertEqual(processor.stats.files_succeeded, 1)
+        self.assertEqual(processor.stats.files_failed, 1)
+        self.assertEqual(len(processor.stats.errors), 1)
+        self.assertEqual(processor.stats.errors[0].code, "E_TARGET_SAVE")
+
     def test_multi_column_fill_blank_only_preserves_non_blank_cells(self):
         master_path = self.root / "master_multi_blank.xlsx"
         target_folder = self.root / "targets_multi_blank"
@@ -266,6 +438,55 @@ class CoreProcessorsRegressionTestCase(unittest.TestCase):
         self.assertEqual(updated_count, 1)
         self.assertEqual(read_cell(target_path, 2, 5), "A1")
         self.assertEqual(read_cell(target_path, 2, 6), "keep")
+
+    def test_multi_column_update_records_save_failure_context(self):
+        master_path = self.root / "master_multi_save_error.xlsx"
+        target_folder = self.root / "targets_multi_save_error"
+        target_folder.mkdir()
+        target_path = target_folder / "target.xlsx"
+
+        write_workbook(
+            master_path,
+            [
+                ["id", "key", "match", "meta", "v1", "v2"],
+                ["", "K1", "M1", "", "A1", "A2"],
+            ],
+        )
+        write_workbook(
+            target_path,
+            [
+                ["id", "key", "match", "meta", "out1", "out2"],
+                ["", "K1", "M1", "", "", ""],
+            ],
+        )
+
+        processor = MultiColumnExcelProcessor(log_callback=lambda _msg: None)
+        processor.set_master_file(str(master_path))
+        processor.set_target_folder(str(target_folder))
+        processor.set_column_count(2)
+        processor.set_post_process_enabled(False)
+
+        real_loader = openpyxl.load_workbook
+        with (
+            patch("core.multi_column_processor.get_stable_workers_cap", return_value=1),
+            patch(
+                "core.kernel.excel_io.openpyxl.load_workbook",
+                side_effect=self._load_workbook_with_save_failure(real_loader, [target_path]),
+            ),
+        ):
+            updated_count = processor.process_files()
+
+        self.assertEqual(updated_count, 0)
+        self.assertEqual(processor.stats.files_failed, 1)
+        self.assertEqual(processor.stats.files_succeeded, 0)
+        self.assertEqual(len(processor.stats.errors), 1)
+        error = processor.stats.errors[0]
+        self.assertEqual(error.code, "E_TARGET_SAVE")
+        self.assertIsInstance(error.exception, PermissionError)
+        self.assertEqual(error.context["stage"], "save")
+        self.assertEqual(error.context["update_count"], 2)
+        self.assertEqual(error.context["sample_row"], 2)
+        self.assertEqual(error.context["sample_col"], 5)
 
     def test_multi_column_skip_blank_content_per_cell_by_default(self):
         master_path = self.root / "master_multi_blank_content.xlsx"
