@@ -1,5 +1,6 @@
 import os
 import time
+from dataclasses import dataclass
 
 from core.kernel import (
     ErrorEvent,
@@ -14,6 +15,14 @@ from core.kernel import (
     safe_to_str,
 )
 from core.kernel.excel_io import open_workbook
+
+
+@dataclass(frozen=True)
+class TargetReadResult:
+    data: dict[str, str]
+    files_succeeded: int = 0
+    files_failed: int = 0
+    error_event: ErrorEvent | None = None
 
 
 class ReverseExcelProcessor:
@@ -68,7 +77,7 @@ class ReverseExcelProcessor:
         self.log_callback(message)
 
     def _log_error(self, code, message, file_path="", row=None, col=None, exc=None, context=None):
-        event = ErrorEvent(
+        event = self._build_error_event(
             code=code,
             message=message,
             file_path=file_path,
@@ -78,6 +87,20 @@ class ReverseExcelProcessor:
             context=context or {},
         )
         self.event_logger.error(self.stats, event)
+
+    def _build_error_event(self, code, message, file_path="", row=None, col=None, exception=None, context=None):
+        return ErrorEvent(
+            code=code,
+            message=message,
+            file_path=file_path,
+            row=row,
+            col=col,
+            exception=exception,
+            context=context or {},
+        )
+
+    def _emit_error_event(self, event: ErrorEvent):
+        self.log_callback(f"[{self.io_contract.mode_name}] {event.as_log_line()}")
 
     def process_files(self):
         if not self.master_file_path or not self.target_folder:
@@ -110,8 +133,12 @@ class ReverseExcelProcessor:
             max_workers_cap=workers_cap,
         )
         data_dict = {}
-        for local_dict in results:
-            data_dict.update(local_dict)
+        for result in results:
+            data_dict.update(result.data)
+            self.stats.files_succeeded += result.files_succeeded
+            self.stats.files_failed += result.files_failed
+            if result.error_event is not None:
+                self.stats.add_error(result.error_event)
 
         return data_dict
 
@@ -157,17 +184,24 @@ class ReverseExcelProcessor:
                     except IndexError:
                         continue
         except Exception as exc:
-            self._log_error(
+            error_event = self._build_error_event(
                 "E_TARGET_READ",
                 "读取小表文件失败",
                 file_path=file_path,
-                exc=exc,
+                exception=exc,
                 context={"file_name": os.path.basename(file_path)},
             )
-            return {}
+            self._emit_error_event(error_event)
+            return TargetReadResult(
+                data={},
+                files_failed=1,
+                error_event=error_event,
+            )
 
-        self.stats.files_succeeded += 1
-        return local_dict
+        return TargetReadResult(
+            data=local_dict,
+            files_succeeded=1,
+        )
 
     def _list_target_files_internal(self, folder_path=None):
         folder = self.target_folder if folder_path is None else folder_path

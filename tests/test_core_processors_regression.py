@@ -628,6 +628,8 @@ class CoreProcessorsRegressionTestCase(unittest.TestCase):
 
         self.assertEqual(updated_count, 1)
         self.assertEqual(read_cell(master_path, 2, 4), "from_b")
+        self.assertEqual(processor.stats.files_succeeded, 2)
+        self.assertEqual(processor.stats.files_failed, 0)
 
     def test_reverse_update_requires_exact_combined_key_match(self):
         master_path = self.root / "master_reverse_exact.xlsx"
@@ -660,6 +662,64 @@ class CoreProcessorsRegressionTestCase(unittest.TestCase):
         self.assertEqual(updated_count, 1)
         self.assertEqual(read_cell(master_path, 2, 4), "from_target")
         self.assertEqual(read_cell(master_path, 3, 4), "keep-m2")
+
+    def test_reverse_read_failure_updates_stats_and_keeps_successful_updates(self):
+        master_path = self.root / "master_reverse_read_error.xlsx"
+        target_folder = self.root / "targets_reverse_read_error"
+        target_folder.mkdir()
+        good_path = target_folder / "a.xlsx"
+        bad_path = target_folder / "b.xlsx"
+
+        write_workbook(
+            master_path,
+            [
+                ["id", "key", "match", "translation"],
+                ["", "K1", "M1", ""],
+            ],
+        )
+        write_workbook(
+            good_path,
+            [
+                ["key", "match", "translation"],
+                ["K1", "M1", "from_good"],
+            ],
+        )
+        write_workbook(
+            bad_path,
+            [
+                ["key", "match", "translation"],
+                ["K1", "M1", "from_bad"],
+            ],
+        )
+
+        processor = ReverseExcelProcessor(log_callback=lambda _msg: None)
+        processor.set_master_file(str(master_path))
+        processor.set_target_folder(str(target_folder))
+
+        real_loader = openpyxl.load_workbook
+
+        def loader(filename, *args, **kwargs):
+            if kwargs.get("read_only") and str(Path(filename)) == str(bad_path):
+                raise PermissionError("read-open denied")
+            return real_loader(filename, *args, **kwargs)
+
+        with patch(
+            "core.kernel.excel_io.openpyxl.load_workbook",
+            side_effect=loader,
+        ):
+            updated_count = processor.process_files()
+
+        self.assertEqual(updated_count, 1)
+        self.assertEqual(read_cell(master_path, 2, 4), "from_good")
+        self.assertEqual(processor.stats.files_total, 2)
+        self.assertEqual(processor.stats.files_succeeded, 1)
+        self.assertEqual(processor.stats.files_failed, 1)
+        self.assertEqual(len(processor.stats.errors), 1)
+        error = processor.stats.errors[0]
+        self.assertEqual(error.code, "E_TARGET_READ")
+        self.assertEqual(error.file_path, str(bad_path))
+        self.assertEqual(error.context["file_name"], bad_path.name)
+        self.assertIsInstance(error.exception, PermissionError)
 
     def test_reverse_update_with_sparse_columns(self):
         master_path = self.root / "master_reverse_sparse.xlsx"
@@ -798,7 +858,7 @@ class CoreProcessorsRegressionTestCase(unittest.TestCase):
         with (
             patch("core.reverse_excel_processor.get_stable_workers_cap", return_value=6),
             patch("core.reverse_excel_processor.iter_excel_files", return_value=["a.xlsx", "b.xlsx"]),
-            patch("core.reverse_excel_processor.run_parallel_map", return_value=[{}, {}]) as reverse_parallel,
+            patch("core.reverse_excel_processor.run_parallel_map", return_value=[]) as reverse_parallel,
             patch.object(reverse, "_update_master_file", return_value=0),
         ):
             reverse.process_files()
