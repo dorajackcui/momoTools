@@ -24,6 +24,7 @@ This file is the governance entry for the active documentation set. Use it to de
 | Validation and commands | `docs/testing.md` | Change-oriented verification matrix, canonical commands, test selection |
 | Environment and workflow | `docs/development.md` | Setup, environment matrix, development workflow, repo-local Python guidance |
 | Packaging and release constraints | `docs/deployment.md` | Packaging expectations, Windows validation, release constraints |
+| End-user quick guide | `docs/user_quick_start.md` | Minimal user-facing launch steps, common tab mapping, and safe operation reminders |
 | Stable product and engineering decisions | `docs/decisions.md` | Durable guarantees that should not silently drift even if implementation moves |
 
 Local `AGENTS.md` files do not replace these owners. They summarize directory-specific guidance and route changes back to the canonical owner docs.

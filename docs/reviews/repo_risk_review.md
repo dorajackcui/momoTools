@@ -27,7 +27,7 @@
 
 
 
-### 3) 并行读文件时共享统计对象无同步保护（工程化/正确性）
+### (Closed) 3) 并行读文件时共享统计对象无同步保护（工程化/正确性）
 - **问题位置**：`core/reverse_excel_processor.py` 中 `_read_single_target_file()` 对 `self.stats.files_succeeded` 的自增。
 - **为什么是问题**：该方法由 `run_parallel_map()` 线程池并发调用，`self.stats` 为共享对象且无锁保护，统计结果可能出现竞态。
 - **实际风险**：任务成功/失败计数不准确，影响运维判断、问题回溯和自动化报告可信度。

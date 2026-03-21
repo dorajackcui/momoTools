@@ -50,5 +50,6 @@ Run the canonical regression entrypoint:
 ## Documentation
 
 - Start here: [docs/README.md](./docs/README.md)
+- End-user quick guide: [docs/user_quick_start.md](./docs/user_quick_start.md)
 - Agent guidance: [AGENTS.md](./AGENTS.md)
 - Historical context: [archive/old_docs/README.md](./archive/old_docs/README.md)
