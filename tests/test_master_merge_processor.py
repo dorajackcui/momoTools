@@ -155,6 +155,82 @@ class MasterMergeProcessorTestCase(unittest.TestCase):
         self.assertEqual(result.added_rows, 1)
         self.assertEqual(read_row(master_path, 2, 4), ["K2", "  M2  ", "0.25", "2026-03-16 00:00:00"])
 
+    def test_merge_combined_key_treats_same_key_different_matches_as_distinct_rows(self):
+        master_path = self.root / "master.xlsx"
+        updates_dir = self.root / "updates"
+        updates_dir.mkdir()
+
+        write_workbook(
+            master_path,
+            [
+                ["key", "match", "v1"],
+            ],
+        )
+
+        source_path = updates_dir / "source.xlsx"
+        write_workbook(
+            source_path,
+            [
+                ["key", "match", "v1"],
+                ["K1", "M1", "FROM_M1"],
+                ["K1", "M2", "FROM_M2"],
+            ],
+        )
+
+        processor = self._build_processor(master_path, updates_dir, [source_path])
+        processor.set_policies(
+            cell_write_policy=CELL_WRITE_POLICY_FILL_BLANK_ONLY,
+            key_admission_policy=KEY_ADMISSION_POLICY_ALLOW_NEW,
+            priority_winner_policy=PRIORITY_WINNER_POLICY_LAST_PROCESSED,
+        )
+
+        result = processor.process_files()
+
+        self.assertEqual(result.added_rows, 2)
+        self.assertEqual(read_row(master_path, 2, 3), ["K1", "M1", "FROM_M1"])
+        self.assertEqual(read_row(master_path, 3, 3), ["K1", "M2", "FROM_M2"])
+
+    def test_merge_combined_key_duplicate_identity_keeps_first_priority_file_row(self):
+        master_path = self.root / "master.xlsx"
+        updates_dir = self.root / "updates"
+        updates_dir.mkdir()
+
+        write_workbook(
+            master_path,
+            [
+                ["key", "match", "v1", "v2"],
+            ],
+        )
+
+        first_path = updates_dir / "first.xlsx"
+        second_path = updates_dir / "second.xlsx"
+        write_workbook(
+            first_path,
+            [
+                ["key", "match", "v1", "v2"],
+                ["K1", "M1", "FIRST_V1", "FIRST_V2"],
+            ],
+        )
+        write_workbook(
+            second_path,
+            [
+                ["key", "match", "v1", "v2"],
+                ["K1", "M1", "SECOND_V1", "SECOND_V2"],
+            ],
+        )
+
+        processor = self._build_processor(master_path, updates_dir, [first_path, second_path])
+        processor.set_policies(
+            cell_write_policy=CELL_WRITE_POLICY_FILL_BLANK_ONLY,
+            key_admission_policy=KEY_ADMISSION_POLICY_ALLOW_NEW,
+            priority_winner_policy=PRIORITY_WINNER_POLICY_LAST_PROCESSED,
+        )
+
+        result = processor.process_files()
+
+        self.assertEqual(result.added_rows, 1)
+        self.assertEqual(read_row(master_path, 2, 4), ["K1", "M1", "FIRST_V1", "FIRST_V2"])
+
     def test_list_update_files_matches_internal_sorted_sources(self):
         master_path = self.root / "master.xlsx"
         updates_dir = self.root / "updates"
@@ -820,6 +896,97 @@ class MasterMergeProcessorTestCase(unittest.TestCase):
         self.assertEqual(result.filled_blank_cells, 0)
         self.assertEqual(read_row(master_path, 2, 3), ["K1", "M1", "OLD_V"])
 
+    def test_update_content_combined_key_keeps_last_processed_values_for_touched_columns(self):
+        master_path = self.root / "master.xlsx"
+        updates_dir = self.root / "updates"
+        updates_dir.mkdir()
+
+        write_workbook(
+            master_path,
+            [
+                ["key", "match", "v1", "v2"],
+                ["K1", "M1", "OLD_V1", "OLD_V2"],
+            ],
+        )
+
+        first_path = updates_dir / "first.xlsx"
+        second_path = updates_dir / "second.xlsx"
+        write_workbook(
+            first_path,
+            [
+                ["key", "match", "v1", "v2"],
+                ["K1", "M1", "FIRST_V1", ""],
+            ],
+        )
+        write_workbook(
+            second_path,
+            [
+                ["key", "match", "v1", "v2"],
+                ["K1", "M1", "SECOND_V1", "SECOND_V2"],
+            ],
+        )
+
+        processor = self._build_processor(master_path, updates_dir, [first_path, second_path])
+        processor.set_columns(0, 1, 3)
+        processor.set_policies(
+            cell_write_policy=CELL_WRITE_POLICY_OVERWRITE_NON_BLANK,
+            key_admission_policy=KEY_ADMISSION_POLICY_EXISTING_ONLY,
+            priority_winner_policy=PRIORITY_WINNER_POLICY_LAST_PROCESSED,
+        )
+
+        result = processor.process_files()
+
+        self.assertEqual(result.updated_cells, 2)
+        self.assertEqual(result.overwritten_cells, 2)
+        self.assertEqual(result.skipped_new_keys, 0)
+        self.assertEqual(read_row(master_path, 2, 4), ["K1", "M1", "SECOND_V1", "SECOND_V2"])
+
+    def test_update_content_combined_key_does_not_cross_update_same_key_different_match(self):
+        master_path = self.root / "master.xlsx"
+        updates_dir = self.root / "updates"
+        updates_dir.mkdir()
+
+        write_workbook(
+            master_path,
+            [
+                ["key", "match", "v1"],
+                ["K1", "M1", "KEEP_M1"],
+                ["K2", "M2", "OLD_M2"],
+            ],
+        )
+
+        source_path = updates_dir / "source.xlsx"
+        write_workbook(
+            source_path,
+            [
+                ["key", "match", "v1"],
+                ["K1", "M2", "WRONG_MATCH"],
+                ["K2", "M2", "RIGHT_MATCH"],
+            ],
+        )
+
+        processor = self._build_processor(master_path, updates_dir, [source_path])
+        processor.set_policies(
+            cell_write_policy=CELL_WRITE_POLICY_OVERWRITE_NON_BLANK,
+            key_admission_policy=KEY_ADMISSION_POLICY_EXISTING_ONLY,
+            priority_winner_policy=PRIORITY_WINNER_POLICY_LAST_PROCESSED,
+        )
+
+        result = processor.process_files()
+
+        self.assertEqual(result.updated_cells, 1)
+        self.assertEqual(result.skipped_new_keys, 1)
+        self.assertEqual(result.unmatched_entries, 1)
+        self.assertEqual(read_row(master_path, 2, 3), ["K1", "M1", "KEEP_M1"])
+        self.assertEqual(read_row(master_path, 3, 3), ["K2", "M2", "RIGHT_MATCH"])
+        self.assertEqual(
+            read_rows(Path(result.unmatched_report_path)),
+            [
+                ["key", "match", "source_file", "content_col_3"],
+                ["K1", "M2", "source.xlsx", "WRONG_MATCH"],
+            ],
+        )
+
     def test_update_content_sparse_stringifies_values_and_skips_whitespace_only(self):
         master_path = self.root / "master.xlsx"
         updates_dir = self.root / "updates"
@@ -943,4 +1110,3 @@ class MasterMergeProcessorTestCase(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-

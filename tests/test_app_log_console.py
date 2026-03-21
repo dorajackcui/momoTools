@@ -1,6 +1,7 @@
 import collections
 import queue
 import threading
+import time
 import unittest
 from unittest.mock import MagicMock, patch
 
@@ -37,6 +38,25 @@ class BrokenBusyWidget:
 
     def state(self, _value):
         raise RuntimeError("state-boom")
+
+
+class BusyTrackingWidget:
+    _processing_action = True
+
+    def __init__(self):
+        self.state_value = "normal"
+
+    def configure(self, **kwargs):
+        self.state_value = kwargs["state"]
+
+
+def wait_until(predicate, timeout_seconds=1.5):
+    deadline = time.time() + timeout_seconds
+    while time.time() < deadline:
+        if predicate():
+            return True
+        time.sleep(0.01)
+    return False
 
 
 class AppLogConsoleTestCase(unittest.TestCase):
@@ -172,6 +192,58 @@ class AppLogConsoleTestCase(unittest.TestCase):
         self.assertIn("BrokenBusyWidget", matching[0])
         self.assertIn("target_state=disabled", matching[0])
         self.assertIn("RuntimeError", matching[0])
+
+    def test_drain_log_queue_delivers_task_completion_on_drain_thread_before_logging_schedule_failure(self):
+        instance = self._make_app_stub()
+        busy_widget = BusyTrackingWidget()
+        instance._iter_descendants = MagicMock(side_effect=lambda _root: iter([busy_widget]))
+        instance.root.after.side_effect = RuntimeError("after-boom")
+        instance.task_runner = app.TkSingleTaskRunner(
+            root=instance.root,
+            set_busy=instance._set_processing_busy,
+            set_status=instance._set_status_text,
+            diagnostic_sink=instance._emit_log,
+        )
+
+        action_thread_ids = []
+        callback_thread_ids = []
+        results = []
+        errors = []
+
+        def action():
+            action_thread_ids.append(threading.get_ident())
+            return 7
+
+        def on_success(result):
+            callback_thread_ids.append(threading.get_ident())
+            results.append(result)
+
+        self.assertTrue(instance.task_runner.run("DrainTask", action, on_success, errors.append))
+        self.assertEqual(instance._task_status_text, "Running: DrainTask")
+        self.assertEqual(busy_widget.state_value, "disabled")
+        self.assertTrue(wait_until(lambda: instance.task_runner._completion_queue.qsize() == 1))
+
+        self.assertEqual(results, [])
+        self.assertEqual(errors, [])
+        self.assertEqual(callback_thread_ids, [])
+
+        drain_thread_id = threading.get_ident()
+        instance._drain_log_queue()
+
+        self.assertEqual(results, [7])
+        self.assertEqual(errors, [])
+        self.assertEqual(callback_thread_ids, [drain_thread_id])
+        self.assertNotEqual(action_thread_ids, callback_thread_ids)
+        self.assertFalse(instance.task_runner._running)
+        self.assertEqual(instance._task_status_text, "Done: DrainTask")
+        self.assertEqual(busy_widget.state_value, "normal")
+
+        instance._drain_log_queue()
+
+        matching = [line for line in instance._log_buffer if "APP_LOG_PUMP_SCHEDULE_FAILED" in line]
+        self.assertEqual(len(matching), 1)
+        self.assertTrue(any(line.endswith("Running: DrainTask") for line in instance._log_buffer))
+        self.assertTrue(any(line.endswith("Done: DrainTask") for line in instance._log_buffer))
 
 
 if __name__ == "__main__":

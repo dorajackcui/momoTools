@@ -106,6 +106,39 @@ class CoreProcessorsRegressionTestCase(unittest.TestCase):
         self.assertEqual(read_cell(target_path, 2, 3), "V1")
         self.assertEqual(read_cell(target_path, 3, 3), "keep-me")
 
+    def test_single_update_requires_exact_combined_key_match(self):
+        master_path = self.root / "master_exact_single.xlsx"
+        target_folder = self.root / "targets_exact_single"
+        target_folder.mkdir()
+        target_path = target_folder / "target.xlsx"
+
+        write_workbook(
+            master_path,
+            [
+                ["id", "key", "match", "value"],
+                ["", "K1", "M1", "V1"],
+            ],
+        )
+        write_workbook(
+            target_path,
+            [
+                ["key", "match", "translation"],
+                ["K1", "M2", "keep-wrong-match"],
+                ["K1", "M1", ""],
+            ],
+        )
+
+        processor = ExcelProcessor(log_callback=lambda _msg: None)
+        processor.set_master_file(str(master_path))
+        processor.set_target_folder(str(target_folder))
+        processor.set_post_process_enabled(False)
+
+        updated_count = processor.process_files()
+
+        self.assertEqual(updated_count, 1)
+        self.assertEqual(read_cell(target_path, 2, 3), "keep-wrong-match")
+        self.assertEqual(read_cell(target_path, 3, 3), "V1")
+
     def test_single_processor_list_target_files_matches_processing_candidates(self):
         target_folder = self.root / "targets_list_single"
         target_folder.mkdir()
@@ -172,6 +205,43 @@ class CoreProcessorsRegressionTestCase(unittest.TestCase):
         self.assertEqual(updated_count, 2)
         self.assertEqual(read_cell(target_path, 2, 5), "A1")
         self.assertEqual(read_cell(target_path, 2, 6), "A2")
+
+    def test_multi_column_update_requires_exact_combined_key_match(self):
+        master_path = self.root / "master_multi_exact.xlsx"
+        target_folder = self.root / "targets_multi_exact"
+        target_folder.mkdir()
+        target_path = target_folder / "target.xlsx"
+
+        write_workbook(
+            master_path,
+            [
+                ["id", "key", "match", "meta", "v1", "v2"],
+                ["", "K1", "M1", "", "A1", "A2"],
+            ],
+        )
+        write_workbook(
+            target_path,
+            [
+                ["id", "key", "match", "meta", "out1", "out2"],
+                ["", "K1", "M2", "", "WRONG_1", "WRONG_2"],
+                ["", "K1", "M1", "", "OLD_1", "OLD_2"],
+            ],
+        )
+
+        processor = MultiColumnExcelProcessor(log_callback=lambda _msg: None)
+        processor.set_master_file(str(master_path))
+        processor.set_target_folder(str(target_folder))
+        processor.set_column_count(2)
+        processor.set_post_process_enabled(False)
+        processor.set_fill_blank_only(False)
+
+        updated_count = processor.process_files()
+
+        self.assertEqual(updated_count, 2)
+        self.assertEqual(read_cell(target_path, 2, 5), "WRONG_1")
+        self.assertEqual(read_cell(target_path, 2, 6), "WRONG_2")
+        self.assertEqual(read_cell(target_path, 3, 5), "A1")
+        self.assertEqual(read_cell(target_path, 3, 6), "A2")
 
     def test_single_update_with_sparse_wide_columns(self):
         master_path = self.root / "master_sparse.xlsx"
@@ -558,6 +628,38 @@ class CoreProcessorsRegressionTestCase(unittest.TestCase):
 
         self.assertEqual(updated_count, 1)
         self.assertEqual(read_cell(master_path, 2, 4), "from_b")
+
+    def test_reverse_update_requires_exact_combined_key_match(self):
+        master_path = self.root / "master_reverse_exact.xlsx"
+        target_folder = self.root / "targets_reverse_exact"
+        target_folder.mkdir()
+        target_path = target_folder / "source.xlsx"
+
+        write_workbook(
+            master_path,
+            [
+                ["id", "key", "match", "translation"],
+                ["", "K1", "M1", ""],
+                ["", "K1", "M2", "keep-m2"],
+            ],
+        )
+        write_workbook(
+            target_path,
+            [
+                ["key", "match", "translation"],
+                ["K1", "M1", "from_target"],
+            ],
+        )
+
+        processor = ReverseExcelProcessor(log_callback=lambda _msg: None)
+        processor.set_master_file(str(master_path))
+        processor.set_target_folder(str(target_folder))
+
+        updated_count = processor.process_files()
+
+        self.assertEqual(updated_count, 1)
+        self.assertEqual(read_cell(master_path, 2, 4), "from_target")
+        self.assertEqual(read_cell(master_path, 3, 4), "keep-m2")
 
     def test_reverse_update_with_sparse_columns(self):
         master_path = self.root / "master_reverse_sparse.xlsx"

@@ -36,3 +36,6 @@ env/
 tests/_private_data/**
 !tests/_private_data/
 !tests/_private_data/README.md
+
+
+.DS_Store
