@@ -78,13 +78,19 @@ def open_workbook(
     file_path: str,
     read_only: bool = False,
     data_only: bool = False,
+    keep_links: bool | None = None,
 ) -> Iterator[openpyxl.Workbook]:
     workbook = None
     try:
+        load_kwargs = {
+            "filename": file_path,
+            "read_only": read_only,
+            "data_only": data_only,
+        }
+        if keep_links is not None:
+            load_kwargs["keep_links"] = keep_links
         workbook = openpyxl.load_workbook(
-            filename=file_path,
-            read_only=read_only,
-            data_only=data_only,
+            **load_kwargs,
         )
         yield workbook
     finally:

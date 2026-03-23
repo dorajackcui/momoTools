@@ -1,3 +1,5 @@
+from dataclasses import dataclass
+from time import perf_counter
 from typing import Sequence, Type
 
 from core.kernel import open_workbook
@@ -10,6 +12,14 @@ from core.master_update.policies import (
     PRIORITY_WINNER_POLICY_LAST_PROCESSED,
     ROW_KEY_POLICY_KEY_ONLY,
 )
+
+
+@dataclass(frozen=True)
+class LayoutResolution:
+    max_col: int
+    content_col_indexes: list[int]
+    probe_used: bool
+    probe_elapsed: float
 
 
 class BaseMasterUpdateExecutor:
@@ -49,22 +59,34 @@ class BaseMasterUpdateExecutor:
             raise ValueError("No readable update files found.")
         return source_files
 
-    def resolve_layout(self) -> tuple[int, list[int]]:
+    def resolve_layout(self) -> LayoutResolution:
         key_col_num = self.key_col + 1
         match_col_num = self.match_col + 1
+        probe_used = False
+        probe_elapsed = 0.0
         try:
-            with open_workbook(self.processor.master_file_path, read_only=True) as probe_workbook:
-                probe_sheet = probe_workbook.active
-                required_col_num = max(key_col_num, match_col_num)
-                max_col = max(probe_sheet.max_column, required_col_num)
+            required_col_num = max(key_col_num, match_col_num)
+            configured_last_update_col_num = None
+            if self.processor.last_update_col is not None:
+                configured_last_update_col_num = self.processor.last_update_col + 1
+                if configured_last_update_col_num < required_col_num:
+                    raise ValueError(
+                        "Last update col must be greater than or equal to Key col and Match col."
+                    )
 
-                if self.processor.last_update_col is not None:
-                    configured_last_update_col_num = self.processor.last_update_col + 1
-                    if configured_last_update_col_num < required_col_num:
-                        raise ValueError(
-                            "Last update col must be greater than or equal to Key col and Match col."
-                        )
-                    max_col = min(max_col, configured_last_update_col_num)
+            if configured_last_update_col_num is not None:
+                max_col = configured_last_update_col_num
+            else:
+                probe_used = True
+                probe_start = perf_counter()
+                with open_workbook(
+                    self.processor.master_file_path,
+                    read_only=True,
+                    keep_links=False,
+                ) as probe_workbook:
+                    probe_sheet = probe_workbook.active
+                    max_col = max(probe_sheet.max_column, required_col_num)
+                probe_elapsed = perf_counter() - probe_start
         except Exception as exc:
             self.processor.stats.files_failed += 1
             self.processor._log_error(
@@ -81,7 +103,12 @@ class BaseMasterUpdateExecutor:
             for index in range(max_col)
             if index != self.key_col and (include_match_as_content or index != self.match_col)
         ]
-        return max_col, content_col_indexes
+        return LayoutResolution(
+            max_col=max_col,
+            content_col_indexes=content_col_indexes,
+            probe_used=probe_used,
+            probe_elapsed=probe_elapsed,
+        )
 
     def finalize_result(
         self,

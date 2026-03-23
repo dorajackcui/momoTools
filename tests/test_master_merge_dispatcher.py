@@ -1,4 +1,5 @@
 import unittest
+from contextlib import contextmanager
 from unittest.mock import patch
 
 from core.master_merge_processor import (
@@ -11,6 +12,7 @@ from core.master_merge_processor import (
     PRIORITY_WINNER_POLICY_LAST_PROCESSED,
     ROW_KEY_POLICY_KEY_ONLY,
 )
+from core.master_update.executors.base import BaseMasterUpdateExecutor
 from core.master_update.executors.merge_masters import MergeMastersExecutor
 from core.master_update.executors.update_content import UpdateContentExecutor
 from core.master_update.executors.update_master import UpdateMasterExecutor
@@ -102,6 +104,53 @@ class MasterMergeDispatcherTestCase(unittest.TestCase):
 
         processor.set_row_key_policy(ROW_KEY_POLICY_KEY_ONLY)
         self.assertEqual(processor.row_key_policy, ROW_KEY_POLICY_KEY_ONLY)
+
+    def test_resolve_layout_uses_last_update_col_without_probe(self):
+        processor = MasterMergeProcessor(log_callback=lambda _msg: None)
+        processor.set_master_file("C:/missing/master.xlsx")
+        processor.set_columns(1, 2, 5)
+        executor = BaseMasterUpdateExecutor(processor)
+
+        with patch(
+            "core.master_update.executors.base.open_workbook",
+            side_effect=AssertionError("layout probe should be skipped"),
+        ):
+            layout = executor.resolve_layout()
+
+        self.assertFalse(layout.probe_used)
+        self.assertEqual(layout.probe_elapsed, 0.0)
+        self.assertEqual(layout.max_col, 6)
+        self.assertEqual(layout.content_col_indexes, [0, 3, 4, 5])
+
+    def test_resolve_layout_falls_back_to_master_probe_when_last_update_col_missing(self):
+        processor = MasterMergeProcessor(log_callback=lambda _msg: None)
+        processor.set_master_file("C:/tmp/master.xlsx")
+        processor.set_columns(1, 2, None)
+        executor = BaseMasterUpdateExecutor(processor)
+
+        class FakeWorkbook:
+            def __init__(self):
+                self.active = type("FakeSheet", (), {"max_column": 7})()
+
+        @contextmanager
+        def fake_open_workbook(*_args, **_kwargs):
+            yield FakeWorkbook()
+
+        with patch(
+            "core.master_update.executors.base.open_workbook",
+            side_effect=fake_open_workbook,
+        ) as open_workbook_mock:
+            layout = executor.resolve_layout()
+
+        open_workbook_mock.assert_called_once_with(
+            "C:/tmp/master.xlsx",
+            read_only=True,
+            keep_links=False,
+        )
+        self.assertTrue(layout.probe_used)
+        self.assertGreaterEqual(layout.probe_elapsed, 0.0)
+        self.assertEqual(layout.max_col, 7)
+        self.assertEqual(layout.content_col_indexes, [0, 3, 4, 5, 6])
 
 
 if __name__ == "__main__":

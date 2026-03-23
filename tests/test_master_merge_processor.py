@@ -2,6 +2,7 @@ from datetime import date
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 import openpyxl
 
@@ -1065,6 +1066,8 @@ class MasterMergeProcessorTestCase(unittest.TestCase):
         self.assertEqual(result.added_rows, 0)
         perf_logs = [line for line in logs if line.startswith("Perf(Update Master):")]
         self.assertTrue(perf_logs)
+        self.assertIn("layout_probe_used=", perf_logs[-1])
+        self.assertIn("layout_probe=", perf_logs[-1])
         self.assertIn("open_master_rw_apply=0.00s", perf_logs[-1])
         self.assertIn("save_master=0.00s", perf_logs[-1])
 
@@ -1106,6 +1109,158 @@ class MasterMergeProcessorTestCase(unittest.TestCase):
         self.assertEqual(result.updated_cells, 1)
         perf_logs = [line for line in logs if line.startswith("Perf(Update Content):")]
         self.assertTrue(perf_logs)
+        self.assertIn("layout_probe_used=", perf_logs[-1])
+        self.assertIn("layout_probe=", perf_logs[-1])
+
+    def test_update_master_read_only_loads_disable_external_links(self):
+        master_path = self.root / "master.xlsx"
+        updates_dir = self.root / "updates"
+        updates_dir.mkdir()
+
+        write_workbook(
+            master_path,
+            [
+                ["key", "match", "v1"],
+                ["K1", "M1", "OLD_V"],
+            ],
+        )
+        source_path = updates_dir / "source.xlsx"
+        write_workbook(
+            source_path,
+            [
+                ["key", "match", "v1"],
+                ["K1", "M1", "NEW_V"],
+            ],
+        )
+
+        processor = self._build_processor(master_path, updates_dir, [source_path])
+        processor.set_columns(0, 1, 2)
+        processor.set_policies(
+            cell_write_policy=CELL_WRITE_POLICY_OVERWRITE_NON_BLANK,
+            key_admission_policy=KEY_ADMISSION_POLICY_ALLOW_NEW,
+            priority_winner_policy=PRIORITY_WINNER_POLICY_LAST_PROCESSED,
+        )
+
+        real_loader = openpyxl.load_workbook
+        seen_load_kwargs: list[dict[str, object]] = []
+
+        def tracking_loader(*args, **kwargs):
+            seen_load_kwargs.append(dict(kwargs))
+            return real_loader(*args, **kwargs)
+
+        with patch(
+            "core.kernel.excel_io.openpyxl.load_workbook",
+            side_effect=tracking_loader,
+        ):
+            result = processor.process_files()
+
+        self.assertEqual(result.updated_cells, 1)
+        read_only_calls = [kwargs for kwargs in seen_load_kwargs if kwargs.get("read_only")]
+        self.assertTrue(read_only_calls)
+        self.assertTrue(all(kwargs.get("keep_links") is False for kwargs in read_only_calls))
+
+        read_write_calls = [kwargs for kwargs in seen_load_kwargs if not kwargs.get("read_only")]
+        self.assertTrue(read_write_calls)
+        self.assertTrue(all("keep_links" not in kwargs for kwargs in read_write_calls))
+
+    def test_update_master_skips_master_scan_when_no_valid_source_candidates(self):
+        master_path = self.root / "master.xlsx"
+        updates_dir = self.root / "updates"
+        updates_dir.mkdir()
+
+        write_workbook(
+            master_path,
+            [
+                ["key", "match", "v1"],
+                ["K1", "M1", "OLD_V"],
+            ],
+        )
+        source_path = updates_dir / "source.xlsx"
+        write_workbook(
+            source_path,
+            [
+                ["key", "match", "v1"],
+                ["", "M2", "IGNORED"],
+            ],
+        )
+
+        logs: list[str] = []
+        processor = MasterMergeProcessor(log_callback=logs.append)
+        processor.set_master_file(str(master_path))
+        processor.set_update_folder(str(updates_dir))
+        processor.set_columns(0, 1, 2)
+        processor.set_priority_files([str(source_path)])
+        processor.set_policies(
+            cell_write_policy=CELL_WRITE_POLICY_OVERWRITE_NON_BLANK,
+            key_admission_policy=KEY_ADMISSION_POLICY_ALLOW_NEW,
+            priority_winner_policy=PRIORITY_WINNER_POLICY_LAST_PROCESSED,
+        )
+
+        with patch(
+            "core.master_update.executors.update_master.open_workbook",
+            side_effect=AssertionError("master scan should be skipped"),
+        ):
+            result = processor.process_files()
+
+        self.assertEqual(result.updated_cells, 0)
+        self.assertEqual(result.added_rows, 0)
+        self.assertEqual(result.merged_keys, 0)
+        perf_logs = [line for line in logs if line.startswith("Perf(Update Master):")]
+        self.assertTrue(perf_logs)
+        self.assertIn("scan_master_ro=0.00s", perf_logs[-1])
+
+    def test_update_content_skips_master_scan_when_no_valid_source_candidates(self):
+        master_path = self.root / "master.xlsx"
+        updates_dir = self.root / "updates"
+        updates_dir.mkdir()
+
+        write_workbook(
+            master_path,
+            [
+                ["key", "match", "v1"],
+                ["K1", "M1", "OLD_V"],
+            ],
+        )
+        source_path = updates_dir / "source.xlsx"
+        write_workbook(
+            source_path,
+            [
+                ["key", "match", "v1"],
+                ["K1", "", "IGNORED"],
+            ],
+        )
+
+        logs: list[str] = []
+        processor = MasterMergeProcessor(log_callback=logs.append)
+        processor.set_master_file(str(master_path))
+        processor.set_update_folder(str(updates_dir))
+        processor.set_columns(0, 1, 2)
+        processor.set_priority_files([str(source_path)])
+        processor.set_policies(
+            cell_write_policy=CELL_WRITE_POLICY_OVERWRITE_NON_BLANK,
+            key_admission_policy=KEY_ADMISSION_POLICY_EXISTING_ONLY,
+            priority_winner_policy=PRIORITY_WINNER_POLICY_LAST_PROCESSED,
+        )
+
+        with patch(
+            "core.master_update.executors.update_master.open_workbook",
+            side_effect=AssertionError("master scan should be skipped"),
+        ):
+            result = processor.process_files()
+
+        self.assertEqual(result.updated_cells, 0)
+        self.assertEqual(result.added_rows, 0)
+        self.assertEqual(result.skipped_new_keys, 0)
+        self.assertEqual(result.unmatched_entries, 0)
+        self.assertEqual(result.merged_keys, 0)
+        self.assertTrue(Path(result.unmatched_report_path).exists())
+        self.assertEqual(
+            read_rows(Path(result.unmatched_report_path)),
+            [["key", "match", "source_file", "content_col_3"]],
+        )
+        perf_logs = [line for line in logs if line.startswith("Perf(Update Content):")]
+        self.assertTrue(perf_logs)
+        self.assertIn("scan_master_ro=0.00s", perf_logs[-1])
 
 
 if __name__ == "__main__":

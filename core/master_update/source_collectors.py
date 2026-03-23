@@ -62,7 +62,7 @@ def _scan_source_files(
     for file_index, file_path in enumerate(source_files, start=1):
         on_log(f"Merging source [{file_index}/{len(source_files)}]: {os.path.basename(file_path)}")
         try:
-            with open_workbook(file_path, read_only=True) as workbook:
+            with open_workbook(file_path, read_only=True, keep_links=False) as workbook:
                 worksheet = workbook.active
                 for row_values in worksheet.iter_rows(
                     min_row=2,

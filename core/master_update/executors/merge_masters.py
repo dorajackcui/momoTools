@@ -20,7 +20,9 @@ class MergeMastersExecutor(BaseMasterUpdateExecutor):
 
     def run(self, source_files: Sequence[str]):
         total_start = perf_counter()
-        max_col, content_col_indexes = self.resolve_layout()
+        layout = self.resolve_layout()
+        max_col = layout.max_col
+        content_col_indexes = layout.content_col_indexes
 
         collect_start = perf_counter()
         candidate_rows = self._collect_append_candidates(
@@ -45,7 +47,11 @@ class MergeMastersExecutor(BaseMasterUpdateExecutor):
         else:
             scan_max_col = key_col_num
         try:
-            with open_workbook(self.processor.master_file_path, read_only=True) as workbook:
+            with open_workbook(
+                self.processor.master_file_path,
+                read_only=True,
+                keep_links=False,
+            ) as workbook:
                 worksheet = workbook.active
                 for row_values in worksheet.iter_rows(
                     min_row=2,
@@ -111,6 +117,8 @@ class MergeMastersExecutor(BaseMasterUpdateExecutor):
         self.processor.log(
             (
                 "Perf(Merge Masters): "
+                f"layout_probe_used={'yes' if layout.probe_used else 'no'}, "
+                f"layout_probe={layout.probe_elapsed:.2f}s, "
                 f"collect_sources={collect_sources_elapsed:.2f}s, "
                 f"scan_master_ro={scan_master_elapsed:.2f}s, "
                 f"open_master_rw_apply={open_apply_elapsed:.2f}s, "
@@ -143,7 +151,7 @@ class MergeMastersExecutor(BaseMasterUpdateExecutor):
                 f"Merging source [{file_index}/{len(source_files)}]: {os.path.basename(file_path)}"
             )
             try:
-                with open_workbook(file_path, read_only=True) as workbook:
+                with open_workbook(file_path, read_only=True, keep_links=False) as workbook:
                     worksheet = workbook.active
                     for row_values in worksheet.iter_rows(
                         min_row=2,
